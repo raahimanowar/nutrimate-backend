@@ -14,6 +14,31 @@ const UserSchema = new mongoose.Schema(
     profilePic: { type: String },
     dateOfBirth: { type: Date },
     role: { type: String, default: "user" },
+    budgetPreferences: {
+      monthlyBudget: { type: Number },
+      spendingCategories: {
+        groceries: { type: Number, default: 0 },
+        diningOut: { type: Number, default: 0 },
+        supplements: { type: Number, default: 0 },
+        other: { type: Number, default: 0 }
+      }
+    },
+    dietaryNeeds: {
+      dietType: {
+        type: String,
+        enum: ["balanced", "plantBased", "lowCarb", "highProtein"],
+        default: "balanced"
+      },
+      allergies: [String], // Free text allergies that users can specify
+      caloriesPerDay: { type: Number, min: 800, max: 5000 },
+      macroTargets: {
+        protein: { type: Number, min: 0, max: 100 }, // percentage
+        carbs: { type: Number, min: 0, max: 100 },   // percentage
+        fats: { type: Number, min: 0, max: 100 }     // percentage
+      },
+      waterIntakeGoal: { type: Number, default: 8 }, // glasses per day
+      avoidIngredients: [String] // custom ingredients to avoid
+    }
   },
   {
     timestamps: true,
