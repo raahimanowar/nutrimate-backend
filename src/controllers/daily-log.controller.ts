@@ -543,3 +543,258 @@ export const getDailyLogSummary = async (req: AuthRequest, res: Response) => {
     });
   }
 };
+
+// Get all-time consumption history and analysis
+export const getAllTimeConsumptionHistory = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required"
+      });
+    }
+
+    const {
+      limit = '1000',
+      page = '1',
+      sortBy = 'date',
+      sortOrder = 'desc',
+      includeTotals = 'true'
+    } = req.query as {
+      limit?: string;
+      page?: string;
+      sortBy?: string;
+      sortOrder?: string;
+      includeTotals?: string;
+    };
+
+    // Pagination
+    const limitNum = parseInt(limit);
+    const pageNum = parseInt(page);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Build sort options
+    const sortOptions: any = {};
+    if (sortBy === 'date') {
+      sortOptions.date = sortOrder === 'asc' ? 1 : -1;
+    } else if (sortBy === 'totalCalories') {
+      sortOptions.totalCalories = sortOrder === 'asc' ? 1 : -1;
+    } else if (sortBy === 'totalProtein') {
+      sortOptions.totalProtein = sortOrder === 'asc' ? 1 : -1;
+    } else {
+      sortOptions.date = -1; // default sort
+    }
+
+    // Get all daily logs for user
+    const [dailyLogs, total] = await Promise.all([
+      DailyLog.find({ userId: req.user.userId })
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(limitNum),
+      DailyLog.countDocuments({ userId: req.user.userId })
+    ]);
+
+    if (dailyLogs.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No consumption history found",
+        data: {
+          history: [],
+          summary: {
+            totalDays: 0,
+            firstLogDate: null,
+            lastLogDate: null,
+            overallTotals: null,
+            dailyAverages: null,
+            foodFrequency: {},
+            mealFrequency: {},
+            categoryFrequency: {},
+            topFoods: [],
+            monthlyTrends: [],
+            yearlyTrends: []
+          },
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total: 0,
+            totalPages: 0
+          }
+        }
+      });
+    }
+
+    // Process daily logs for analysis
+    const history = dailyLogs.map(log => ({
+      _id: log._id,
+      date: log.date.toISOString().split('T')[0],
+      items: log.items,
+      totalCalories: log.totalCalories,
+      totalProtein: log.totalProtein,
+      totalCarbs: log.totalCarbs,
+      totalFats: log.totalFats,
+      totalFiber: log.totalFiber,
+      totalSugar: log.totalSugar,
+      totalSodium: log.totalSodium,
+      waterIntake: log.waterIntake,
+      itemsCount: log.items.length,
+      createdAt: log.createdAt
+    }));
+
+    let summary = null;
+
+    if (includeTotals === 'true') {
+      // Calculate comprehensive statistics
+      const totalDays = dailyLogs.length;
+      const firstLogDate = new Date(Math.min(...dailyLogs.map(log => log.date.getTime())));
+      const lastLogDate = new Date(Math.max(...dailyLogs.map(log => log.date.getTime())));
+
+      // Overall totals
+      const overallTotals = {
+        totalCalories: dailyLogs.reduce((sum, log) => sum + log.totalCalories, 0),
+        totalProtein: dailyLogs.reduce((sum, log) => sum + log.totalProtein, 0),
+        totalCarbs: dailyLogs.reduce((sum, log) => sum + log.totalCarbs, 0),
+        totalFats: dailyLogs.reduce((sum, log) => sum + log.totalFats, 0),
+        totalFiber: dailyLogs.reduce((sum, log) => sum + log.totalFiber, 0),
+        totalSugar: dailyLogs.reduce((sum, log) => sum + log.totalSugar, 0),
+        totalSodium: dailyLogs.reduce((sum, log) => sum + log.totalSodium, 0),
+        totalWaterIntake: dailyLogs.reduce((sum, log) => sum + log.waterIntake, 0),
+        totalItems: dailyLogs.reduce((sum, log) => sum + log.items.length, 0),
+        totalDaysLogged: totalDays
+      };
+
+      // Daily averages
+      const dailyAverages = {
+        avgCalories: Math.round(overallTotals.totalCalories / totalDays),
+        avgProtein: Math.round(overallTotals.totalProtein / totalDays),
+        avgCarbs: Math.round(overallTotals.totalCarbs / totalDays),
+        avgFats: Math.round(overallTotals.totalFats / totalDays),
+        avgFiber: Math.round(overallTotals.totalFiber / totalDays),
+        avgSugar: Math.round(overallTotals.totalSugar / totalDays),
+        avgSodium: Math.round(overallTotals.totalSodium / totalDays),
+        avgWaterIntake: Math.round((overallTotals.totalWaterIntake / totalDays) * 10) / 10,
+        avgItemsPerDay: Math.round((overallTotals.totalItems / totalDays) * 10) / 10
+      };
+
+      // Food frequency analysis
+      const foodFrequency: Record<string, number> = {};
+      const mealFrequency: Record<string, number> = { breakfast: 0, lunch: 0, dinner: 0, snack: 0, beverage: 0 };
+      const categoryFrequency: Record<string, number> = { fruits: 0, vegetables: 0, dairy: 0, grains: 0, protein: 0, beverages: 0, snacks: 0, other: 0 };
+
+      dailyLogs.forEach(log => {
+        log.items.forEach(item => {
+          // Track food frequency
+          const foodKey = `${item.itemName.toLowerCase().trim()}|${item.category}`;
+          foodFrequency[foodKey] = (foodFrequency[foodKey] || 0) + 1;
+
+          // Track meal type frequency
+          mealFrequency[item.mealType] = (mealFrequency[item.mealType] || 0) + 1;
+
+          // Track category frequency
+          categoryFrequency[item.category] = (categoryFrequency[item.category] || 0) + 1;
+        });
+      });
+
+      // Top foods (most frequently consumed)
+      const topFoods = Object.entries(foodFrequency)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 20)
+        .map(([key, count]) => {
+          const [itemName, category] = key.split('|');
+          return {
+            itemName,
+            category,
+            count,
+            percentage: Math.round((count / overallTotals.totalItems) * 100)
+          };
+        });
+
+      // Monthly trends
+      const monthlyTrends: Array<{ month: string; avgCalories: number; avgProtein: number; totalDays: number }> = [];
+      const monthlyData: Record<string, { calories: number[]; protein: number[]; days: number }> = {};
+
+      dailyLogs.forEach(log => {
+        const monthKey = log.date.toISOString().slice(0, 7); // YYYY-MM
+        if (!monthlyData[monthKey]) {
+          monthlyData[monthKey] = { calories: [], protein: [], days: 0 };
+        }
+        monthlyData[monthKey].calories.push(log.totalCalories);
+        monthlyData[monthKey].protein.push(log.totalProtein);
+        monthlyData[monthKey].days++;
+      });
+
+      Object.entries(monthlyData)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([month, data]) => {
+          monthlyTrends.push({
+            month,
+            avgCalories: Math.round(data.calories.reduce((sum, val) => sum + val, 0) / data.days),
+            avgProtein: Math.round(data.protein.reduce((sum, val) => sum + val, 0) / data.days),
+            totalDays: data.days
+          });
+        });
+
+      // Yearly trends
+      const yearlyTrends: Array<{ year: string; avgCalories: number; avgProtein: number; totalDays: number }> = [];
+      const yearlyData: Record<string, { calories: number[]; protein: number[]; days: number }> = {};
+
+      dailyLogs.forEach(log => {
+        const yearKey = log.date.toISOString().slice(0, 4); // YYYY
+        if (!yearlyData[yearKey]) {
+          yearlyData[yearKey] = { calories: [], protein: [], days: 0 };
+        }
+        yearlyData[yearKey].calories.push(log.totalCalories);
+        yearlyData[yearKey].protein.push(log.totalProtein);
+        yearlyData[yearKey].days++;
+      });
+
+      Object.entries(yearlyData)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([year, data]) => {
+          yearlyTrends.push({
+            year,
+            avgCalories: Math.round(data.calories.reduce((sum, val) => sum + val, 0) / data.days),
+            avgProtein: Math.round(data.protein.reduce((sum, val) => sum + val, 0) / data.days),
+            totalDays: data.days
+          });
+        });
+
+      summary = {
+        totalDays,
+        firstLogDate: firstLogDate.toISOString().split('T')[0],
+        lastLogDate: lastLogDate.toISOString().split('T')[0],
+        overallTotals,
+        dailyAverages,
+        foodFrequency,
+        mealFrequency,
+        categoryFrequency,
+        topFoods,
+        monthlyTrends,
+        yearlyTrends
+      };
+    }
+
+    logger.info(`All-time consumption history retrieved for user ${req.user.username}: ${dailyLogs.length} days`);
+
+    res.status(200).json({
+      success: true,
+      message: "All-time consumption history retrieved successfully",
+      data: {
+        history,
+        summary,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum)
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error(`Get all-time consumption history error: ${(error as Error).message}`);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error while fetching all-time consumption history"
+    });
+  }
+};

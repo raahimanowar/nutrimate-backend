@@ -7,7 +7,8 @@ import {
   updateDailyLogItem,
   deleteDailyLogItem,
   updateWaterIntake,
-  getDailyLogSummary
+  getDailyLogSummary,
+  getAllTimeConsumptionHistory
 } from "../controllers/daily-log.controller.js";
 import { body, param, query, validationResult } from "express-validator";
 
@@ -248,6 +249,33 @@ const validateSummaryQuery = [
     .withMessage('End date must be in valid ISO8601 format (YYYY-MM-DD)')
 ];
 
+const validateAllTimeQuery = [
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 5000 })
+    .withMessage('Limit must be between 1 and 5000'),
+
+  query('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Page must be a positive integer'),
+
+  query('sortBy')
+    .optional()
+    .isIn(['date', 'totalCalories', 'totalProtein'])
+    .withMessage('Invalid sort field'),
+
+  query('sortOrder')
+    .optional()
+    .isIn(['asc', 'desc'])
+    .withMessage('Sort order must be asc or desc'),
+
+  query('includeTotals')
+    .optional()
+    .isIn(['true', 'false'])
+    .withMessage('Include totals must be true or false')
+];
+
 // Validation middleware
 const handleValidationErrors = (req: any, res: any, next: any) => {
   const errors = validationResult(req);
@@ -286,5 +314,8 @@ router.delete("/item/:logId/:itemId", validateDeleteItem, handleValidationErrors
 
 // Update water intake
 router.put("/water", validateWaterIntake, handleValidationErrors, updateWaterIntake);
+
+// Get all-time consumption history
+router.get("/history", validateAllTimeQuery, handleValidationErrors, getAllTimeConsumptionHistory);
 
 export default router;

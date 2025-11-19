@@ -389,7 +389,205 @@ endDate: string (YYYY-MM-DD, optional - defaults to today)
 5. Log dinner: `POST /api/daily-log/item` with `mealType: "dinner"`
 6. Get daily summary: `GET /api/daily-log/summary`
 
+---
+
+## 8. Get All-Time Consumption History
+**GET** `/api/daily-log/history`
+**Headers:** `Authorization: Bearer <jwt_token>`
+
+**Query Parameters:**
+```
+limit: number (1-5000, default: 1000)
+page: number (default: 1)
+sortBy: date|totalCalories|totalProtein (default: date)
+sortOrder: asc|desc (default: desc)
+includeTotals: true|false (default: true)
+```
+
+**Success (200):**
+```json
+{
+  "success": true,
+  "message": "All-time consumption history retrieved successfully",
+  "data": {
+    "history": [
+      {
+        "_id": "log_id",
+        "date": "2024-01-20",
+        "items": [
+          {
+            "_id": "item_id",
+            "itemName": "Grilled Chicken Breast",
+            "quantity": 150,
+            "unit": "grams",
+            "category": "protein",
+            "calories": 248,
+            "protein": 46,
+            "carbs": 0,
+            "fats": 5.4,
+            "mealType": "dinner",
+            "notes": "Seasoned with herbs"
+          }
+        ],
+        "totalCalories": 1850,
+        "totalProtein": 75,
+        "totalCarbs": 220,
+        "totalFats": 65,
+        "totalFiber": 25,
+        "totalSugar": 80,
+        "totalSodium": 2300,
+        "waterIntake": 8,
+        "itemsCount": 5,
+        "createdAt": "2024-01-20T23:59:59.999Z"
+      }
+    ],
+    "summary": {
+      "totalDays": 365,
+      "firstLogDate": "2023-01-20",
+      "lastLogDate": "2024-01-20",
+      "overallTotals": {
+        "totalCalories": 685750,
+        "totalProtein": 27375,
+        "totalCarbs": 80300,
+        "totalFats": 23725,
+        "totalFiber": 9125,
+        "totalSugar": 29200,
+        "totalSodium": 839500,
+        "totalWaterIntake": 2920,
+        "totalItems": 1825,
+        "totalDaysLogged": 365
+      },
+      "dailyAverages": {
+        "avgCalories": 1880,
+        "avgProtein": 75,
+        "avgCarbs": 220,
+        "avgFats": 65,
+        "avgFiber": 25,
+        "avgSugar": 80,
+        "avgSodium": 2300,
+        "avgWaterIntake": 8.0,
+        "avgItemsPerDay": 5.0
+      },
+      "foodFrequency": {
+        "grilled chicken breast|protein": 48,
+        "oatmeal|grains": 36,
+        "salad|vegetables": 32,
+        "apple|fruits": 28
+      },
+      "mealFrequency": {
+        "breakfast": 365,
+        "lunch": 365,
+        "dinner": 365,
+        "snack": 730,
+        "beverage": 365
+      },
+      "categoryFrequency": {
+        "protein": 480,
+        "vegetables": 320,
+        "grains": 280,
+        "fruits": 240,
+        "dairy": 180,
+        "snacks": 160,
+        "beverages": 120,
+        "other": 45
+      },
+      "topFoods": [
+        {
+          "itemName": "grilled chicken breast",
+          "category": "protein",
+          "count": 48,
+          "percentage": 2.6
+        },
+        {
+          "itemName": "oatmeal",
+          "category": "grains",
+          "count": 36,
+          "percentage": 2.0
+        }
+      ],
+      "monthlyTrends": [
+        {
+          "month": "2023-01",
+          "avgCalories": 1850,
+          "avgProtein": 72,
+          "totalDays": 31
+        },
+        {
+          "month": "2023-02",
+          "avgCalories": 1920,
+          "avgProtein": 78,
+          "totalDays": 28
+        }
+      ],
+      "yearlyTrends": [
+        {
+          "year": "2023",
+          "avgCalories": 1885,
+          "avgProtein": 76,
+          "totalDays": 365
+        }
+      ]
+    },
+    "pagination": {
+      "page": 1,
+      "limit": 1000,
+      "total": 365,
+      "totalPages": 1
+    }
+  }
+}
+```
+
+### **Summary Data Analysis:**
+
+#### **Overall Totals:**
+- **Total consumption**: All calories, protein, carbs, fats consumed across entire history
+- **Total items**: Number of food items logged
+- **Total water intake**: All glasses of water consumed
+
+#### **Daily Averages:**
+- **Mean daily intake**: Average nutritional values per day
+- **Consumption patterns**: Average items consumed per day
+- **Hydration habits**: Average water intake per day
+
+#### **Food Frequency:**
+- **Most consumed foods**: Track frequently eaten items
+- **Count and percentage**: How often each food appears
+- **Category cross-reference**: Food with category mapping
+
+#### **Meal Patterns:**
+- **Breakfast frequency**: How often breakfast is logged
+- **Meal distribution**: Distribution across meal types
+- **Snacking habits**: Frequency of snacks vs meals
+
+#### **Category Analysis:**
+- **Protein intake**: How often protein foods consumed
+- **Balanced diet**: Distribution across food categories
+- **Preference patterns**: Most/least consumed categories
+
+#### **Top Foods:**
+- **Frequent items**: Top 20 most consumed foods
+- **Percentage breakdown**: Each food as % of total items
+- **Popularity ranking**: Most liked/common foods
+
+#### **Monthly Trends:**
+- **Seasonal patterns**: Nutritional changes by month
+- **Progress tracking**: Monthly average comparisons
+- **Habit evolution**: Changes over time
+
+#### **Yearly Trends:**
+- **Long-term patterns**: Year-over-year comparisons
+- **Goal tracking**: Annual nutritional averages
+- **Progress measurement**: Multi-year trends
+
 ### **Weekly Review:**
 1. Get week summary: `GET /api/daily-log/summary?startDate=2024-01-14&endDate=2024-01-20`
 2. Review averages and trends
 3. Adjust dietary goals as needed
+
+### **All-Time Analysis:**
+1. Get comprehensive history: `GET /api/daily-log/history?includeTotals=true`
+2. Analyze food frequency patterns
+3. Review nutritional trends over months/years
+4. Export data for AI training or external analysis
+5. Generate personalized insights and recommendations
