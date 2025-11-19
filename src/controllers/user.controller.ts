@@ -89,6 +89,11 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
       updateData.dietaryNeeds = dietaryNeeds;
     }
 
+    // Handle profilePic separately - only update if explicitly provided
+    if (profilePic !== undefined) {
+      updateData.profilePic = profilePic;
+    }
+
     const updatedUser = await User.findByIdAndUpdate(
       req.user.userId,
       updateData,
