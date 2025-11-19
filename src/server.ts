@@ -10,6 +10,7 @@ import userRoutes from "./routes/user.routes.js";
 import inventoryRoutes from "./routes/inventory.routes.js";
 import dailyLogRoutes from "./routes/daily-log.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
+import resourceRoutes from "./routes/resource.route.js";
 
 dotenv.config();
 
@@ -22,27 +23,28 @@ app.use(helmet()); // Security headers
 app.use(express.json());
 app.use(
   cors({
-    origin: process.env.NODE_ENV === 'production'
-      ? (process.env.FRONTEND_URL || 'https://yourdomain.com') // Restrict to your frontend domain in production
-      : "*", // Allow all origins in development
+    origin:
+      process.env.NODE_ENV === "production"
+        ? process.env.FRONTEND_URL || "https://yourdomain.com" // Restrict to your frontend domain in production
+        : "*", // Allow all origins in development
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true
+    credentials: true,
   })
 );
 
 // Rate limiting (configurable via environment) - AFTER CORS
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes default
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), // 100 requests default
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000"), // 15 minutes default
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100"), // 100 requests default
   message: {
     success: false,
-    message: "Too many requests from this IP, please try again later."
+    message: "Too many requests from this IP, please try again later.",
   },
   standardHeaders: true,
   legacyHeaders: false,
   // Skip rate limiting for OPTIONS requests (CORS preflight)
-  skip: (req) => req.method === 'OPTIONS'
+  skip: (req) => req.method === "OPTIONS",
 });
 
 app.use(limiter); // Apply rate limiting after CORS
@@ -69,6 +71,8 @@ app.use("/api/inventory", inventoryRoutes);
 
 // Daily log routes (protected)
 app.use("/api/daily-log", dailyLogRoutes);
+// Resource routes <- added
+app.use("/api/resources", resourceRoutes);
 
 // Upload routes (protected)
 app.use("/api/upload", uploadRoutes);
