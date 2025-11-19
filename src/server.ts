@@ -1,20 +1,45 @@
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { logger } from "./utils/logger.js";
 import { connectDB } from "./db/db.js";
+import authRoutes from "./routes/auth.routes.js";
+import userRoutes from "./routes/user.routes.js";
+import inventoryRoutes from "./routes/inventory.routes.js";
 
 dotenv.config();
 
 const app = express();
 
-// ---------------- MIDDLEWARE ----------------
+// ---------------- SECURITY MIDDLEWARE ----------------
+app.use(helmet()); // Security headers
+
+// Rate limiting (configurable via environment)
+const limiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes default
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), // 100 requests default
+  message: {
+    success: false,
+    message: "Too many requests from this IP, please try again later."
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use(limiter); // Apply rate limiting to all requests
+
+// ---------------- CORE MIDDLEWARE ----------------
 app.use(express.json());
 app.use(
   cors({
-    origin: "*",
-    methods: "*",
-    allowedHeaders: "*",
+    origin: process.env.NODE_ENV === 'production'
+      ? (process.env.FRONTEND_URL || 'https://yourdomain.com') // Restrict to your frontend domain in production
+      : "*", // Allow all origins in development
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true
   })
 );
 
@@ -30,7 +55,13 @@ app.get("/", (_req, res) => {
 // app.use("/api/tasks", tasksRouter);
 
 // Auth routes
-// app.use("/api/auth", authRoutes);
+app.use("/api/auth", authRoutes);
+
+// User routes (protected)
+app.use("/api/users", userRoutes);
+
+// Inventory routes (protected)
+app.use("/api/inventory", inventoryRoutes);
 
 // API info route
 app.get("/api", (_req, res) => {
