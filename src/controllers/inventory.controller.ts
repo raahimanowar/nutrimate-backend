@@ -13,12 +13,13 @@ export const addItem = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const { itemName, category, expirationPeriod, costPerUnit } = req.body;
+    const { itemName, category, expirationDate, hasExpiration, costPerUnit } = req.body;
 
     const newItem = new Inventory({
       itemName,
       category,
-      expirationPeriod,
+      expirationDate: hasExpiration && expirationDate ? new Date(expirationDate) : null,
+      hasExpiration: hasExpiration !== undefined ? hasExpiration : true,
       costPerUnit,
       userId: req.user.userId
     });
@@ -80,7 +81,7 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { itemName, category, expirationPeriod, costPerUnit } = req.body;
+    const { itemName, category, expirationDate, hasExpiration, costPerUnit } = req.body;
 
     const item = await Inventory.findOne({ _id: id, userId: req.user.userId });
 
@@ -91,9 +92,20 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    const updateData: any = { itemName, category, costPerUnit };
+
+    // Only update expirationDate if hasExpiration is true and expirationDate is provided
+    if (hasExpiration && expirationDate) {
+      updateData.expirationDate = new Date(expirationDate);
+    } else if (!hasExpiration) {
+      updateData.expirationDate = null;
+    }
+
+    updateData.hasExpiration = hasExpiration !== undefined ? hasExpiration : true;
+
     const updatedItem = await Inventory.findByIdAndUpdate(
       id,
-      { itemName, category, expirationPeriod, costPerUnit },
+      updateData,
       { new: true }
     );
 

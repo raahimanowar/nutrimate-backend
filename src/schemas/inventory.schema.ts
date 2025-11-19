@@ -8,7 +8,8 @@ const InventorySchema = new mongoose.Schema(
       required: true,
       enum: ["fruits", "vegetables", "dairy", "grains", "protein", "beverages", "snacks", "other"]
     },
-    expirationPeriod: { type: Number, required: true }, // days
+    expirationDate: { type: Date, required: false }, // optional expiration date
+    hasExpiration: { type: Boolean, required: true, default: true }, // flag for items without expiration
     costPerUnit: { type: Number, required: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }
   },

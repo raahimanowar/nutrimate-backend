@@ -13,7 +13,8 @@
 {
   "itemName": "string",
   "category": "fruits|vegetables|dairy|grains|protein|beverages|snacks|other",
-  "expirationPeriod": "number (days)",
+  "expirationDate": "string (YYYY-MM-DD, optional)",
+  "hasExpiration": "boolean (default: true)",
   "costPerUnit": "number"
 }
 ```
@@ -26,10 +27,30 @@
   "data": {
     "itemName": "Apple",
     "category": "fruits",
-    "expirationPeriod": 7,
+    "expirationDate": "2024-01-24T00:00:00.000Z",
+    "hasExpiration": true,
     "costPerUnit": 0.50,
     "userId": "user_id",
     "_id": "item_id",
+    "createdAt": "2024-01-17T12:00:00.000Z",
+    "updatedAt": "2024-01-17T12:00:00.000Z"
+  }
+}
+```
+
+**Example - Item without expiration:**
+```json
+{
+  "success": true,
+  "message": "Item added successfully",
+  "data": {
+    "itemName": "Rice",
+    "category": "grains",
+    "expirationDate": null,
+    "hasExpiration": false,
+    "costPerUnit": 2.50,
+    "userId": "user_id",
+    "_id": "item_id_2",
     "createdAt": "2024-01-17T12:00:00.000Z",
     "updatedAt": "2024-01-17T12:00:00.000Z"
   }
@@ -51,7 +72,8 @@
     {
       "itemName": "Apple",
       "category": "fruits",
-      "expirationPeriod": 7,
+      "expirationDate": "2024-01-24T00:00:00.000Z",
+      "hasExpiration": true,
       "costPerUnit": 0.50,
       "userId": "user_id",
       "_id": "item_id",
@@ -59,9 +81,10 @@
       "updatedAt": "2024-01-17T12:00:00.000Z"
     },
     {
-      "itemName": "Milk",
-      "category": "dairy",
-      "expirationPeriod": 14,
+      "itemName": "Rice",
+      "category": "grains",
+      "expirationDate": null,
+      "hasExpiration": false,
       "costPerUnit": 2.99,
       "userId": "user_id",
       "_id": "item_id_2",
@@ -83,7 +106,8 @@
 {
   "itemName": "string (optional)",
   "category": "string (optional)",
-  "expirationPeriod": "number (optional)",
+  "expirationDate": "string (YYYY-MM-DD, optional)",
+  "hasExpiration": "boolean (optional)",
   "costPerUnit": "number (optional)"
 }
 ```
@@ -96,7 +120,8 @@
   "data": {
     "itemName": "Green Apple",
     "category": "fruits",
-    "expirationPeriod": 10,
+    "expirationDate": "2024-01-27T00:00:00.000Z",
+    "hasExpiration": true,
     "costPerUnit": 0.75,
     "userId": "user_id",
     "_id": "item_id",
