@@ -22,10 +22,13 @@
   "success": true,
   "message": "User registered successfully",
   "data": {
-    "id": "user_id",
-    "username": "username",
-    "email": "email",
-    "createdAt": "timestamp"
+    "token": "jwt_token_here",
+    "user": {
+      "id": "user_id",
+      "username": "username",
+      "email": "email",
+      "role": "user"
+    }
   }
 }
 ```

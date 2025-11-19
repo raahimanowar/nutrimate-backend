@@ -1,10 +1,18 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import { logger } from "../utils/logger.js";
 import User from "../schemas/users.schema.js";
+import { AuthRequest } from "../types/auth.types.js";
 
 // Get user profile (protected route)
-export const getProfile = async (req: any, res: Response) => {
+export const getProfile = async (req: AuthRequest, res: Response) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required"
+      });
+    }
+
     const user = await User.findById(req.user.userId).select('-password');
 
     if (!user) {
@@ -42,8 +50,15 @@ export const getProfile = async (req: any, res: Response) => {
 };
 
 // Update user profile (protected route)
-export const updateProfile = async (req: any, res: Response) => {
+export const updateProfile = async (req: AuthRequest, res: Response) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required"
+      });
+    }
+
     const { height, weight, address, profilePic, dateOfBirth } = req.body;
 
     const updatedUser = await User.findByIdAndUpdate(
