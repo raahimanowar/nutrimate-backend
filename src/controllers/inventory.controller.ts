@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { logger } from "../utils/logger.js";
 import Inventory from "../schemas/inventory.schema.js";
 import { AuthRequest } from "../types/auth.types.js";
+import { ObjectId } from "mongoose";
 
 // Filter interfaces for type safety
 interface InventoryFilters {
@@ -28,13 +29,13 @@ interface InventoryQueryParams {
 
 // Define proper inventory item type instead of using any
 interface InventoryItemDocument {
-  _id: string;
+  _id: ObjectId;
   itemName: string;
   category: string;
   expirationDate: Date | null;
   hasExpiration: boolean;
   costPerUnit: number;
-  userId: string;
+  userId: ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -42,7 +43,7 @@ interface InventoryItemDocument {
 interface FilteredInventoryResponse {
   success: boolean;
   message: string;
-  data: any[]; // MongoDB returns Document objects, not plain objects
+  data: InventoryItemDocument[]; // Inventory items returned from DB
   filters: InventoryFilters;
   pagination?: {
     page: number;
@@ -173,10 +174,8 @@ const buildInventoryQuery = (userId: string, filters: InventoryFilters) => {
 };
 
 // Apply additional filters that need special handling
-const applySpecialFilters = (
-  mongooseQuery: import('mongoose').Query<any, any>,
-  filters: InventoryFilters
-) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const applySpecialFilters = (mongooseQuery: any, filters: InventoryFilters): any => {
   // Expiring soon filter (items expiring within 3 days)
   if (filters.expiring_soon) {
     const threeDaysFromNow = new Date();
@@ -199,9 +198,7 @@ const applySpecialFilters = (
   // Sorting
   if (filters.sort_by) {
     const sortOrder = filters.sort_order === 'asc' ? 1 : -1;
-    const sortOptions: any = {};
-    sortOptions[filters.sort_by] = sortOrder;
-    mongooseQuery = mongooseQuery.sort(sortOptions);
+    mongooseQuery = mongooseQuery.sort({ [filters.sort_by]: sortOrder });
   } else {
     // Default sort by createdAt desc
     mongooseQuery = mongooseQuery.sort({ createdAt: -1 });
@@ -233,17 +230,14 @@ export const getInventory = async (req: AuthRequest, res: Response) => {
     mongooseQuery = applySpecialFilters(mongooseQuery, filters);
 
     // Execute query
-    const items = await mongooseQuery.exec();
+    const items = await mongooseQuery.exec() as unknown as InventoryItemDocument[];
 
-    // Build response with type safety
-    const response: FilteredInventoryResponse = {
+    res.status(200).json({
       success: true,
       message: "Inventory retrieved successfully",
       data: items,
       filters: filters
-    };
-
-    res.status(200).json(response);
+    });
 
   } catch (error) {
     logger.error(`Get inventory error: ${(error as Error).message}`);
