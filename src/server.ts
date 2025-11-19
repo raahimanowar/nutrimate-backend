@@ -9,6 +9,7 @@ import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import inventoryRoutes from "./routes/inventory.routes.js";
 import dailyLogRoutes from "./routes/daily-log.routes.js";
+import uploadRoutes from "./routes/upload.routes.js";
 import resourceRoutes from "./routes/resource.route.js";
 
 dotenv.config();
@@ -72,6 +73,9 @@ app.use("/api/inventory", inventoryRoutes);
 app.use("/api/daily-log", dailyLogRoutes);
 // Resource routes <- added
 app.use("/api/resources", resourceRoutes);
+
+// Upload routes (protected)
+app.use("/api/upload", uploadRoutes);
 
 // API info route
 app.get("/api", (_req, res) => {
