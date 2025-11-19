@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const UserSchema = z.object({
   username: z.string(),
-  email: z.string().email(),
+  email: z.email(),
   password: z.string(),
   height: z.number(),
   weight: z.number(),
@@ -12,6 +12,7 @@ export const UserSchema = z.object({
   }),
   profilePic: z.string(),
   dateOfBirth: z.date(),
+  role: z.enum(["user", "admin"]).default("user"),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
