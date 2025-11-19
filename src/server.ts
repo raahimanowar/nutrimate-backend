@@ -5,6 +5,7 @@ import { logger } from "./utils/logger.js";
 import { connectDB } from "./db/db.js";
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
+import inventoryRoutes from "./routes/inventory.routes.js";
 
 dotenv.config();
 
@@ -36,6 +37,9 @@ app.use("/api/auth", authRoutes);
 
 // User routes (protected)
 app.use("/api/users", userRoutes);
+
+// Inventory routes (protected)
+app.use("/api/inventory", inventoryRoutes);
 
 // API info route
 app.get("/api", (_req, res) => {
