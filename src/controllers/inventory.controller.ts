@@ -26,10 +26,23 @@ interface InventoryQueryParams {
   sort_order?: string;
 }
 
+// Define proper inventory item type instead of using any
+interface InventoryItemDocument {
+  _id: string;
+  itemName: string;
+  category: string;
+  expirationDate: Date | null;
+  hasExpiration: boolean;
+  costPerUnit: number;
+  userId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 interface FilteredInventoryResponse {
   success: boolean;
   message: string;
-  data: any[];
+  data: any[]; // MongoDB returns Document objects, not plain objects
   filters: InventoryFilters;
   pagination?: {
     page: number;
@@ -79,6 +92,11 @@ export const addItem = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Type guard function for sort fields
+const isValidSortField = (field: string): field is 'createdAt' | 'itemName' | 'category' | 'costPerUnit' | 'expirationDate' => {
+  return ['createdAt', 'itemName', 'category', 'costPerUnit', 'expirationDate'].includes(field);
+};
+
 // Helper function to parse and validate filters
 const parseFilters = (query: InventoryQueryParams): InventoryFilters => {
   const filters: InventoryFilters = {};
@@ -112,15 +130,12 @@ const parseFilters = (query: InventoryQueryParams): InventoryFilters => {
     filters.search = query.search.trim();
   }
 
-  // Sort field with type safety
-  const validSortFields: Array<'createdAt' | 'itemName' | 'category' | 'costPerUnit' | 'expirationDate'> =
-    ['createdAt', 'itemName', 'category', 'costPerUnit', 'expirationDate'];
-
-  if (query.sort_by && validSortFields.includes(query.sort_by as any)) {
-    filters.sort_by = query.sort_by as any;
+  // Sort field with proper type safety - no type assertions
+  if (query.sort_by && isValidSortField(query.sort_by)) {
+    filters.sort_by = query.sort_by;
   }
 
-  // Sort order
+  // Sort order with proper type checking
   if (query.sort_order === 'asc' || query.sort_order === 'desc') {
     filters.sort_order = query.sort_order;
   }
@@ -131,7 +146,12 @@ const parseFilters = (query: InventoryQueryParams): InventoryFilters => {
 // Build MongoDB query from filters
 const buildInventoryQuery = (userId: string, filters: InventoryFilters) => {
   // Base query - always filter by user
-  const query: any = { userId };
+  const query: {
+    userId: string;
+    category?: { $in: string[] };
+    hasExpiration?: boolean;
+    itemName?: { $regex: string; $options: string };
+  } = { userId };
 
   // Category filter (support multiple categories)
   if (filters.category) {
@@ -154,7 +174,7 @@ const buildInventoryQuery = (userId: string, filters: InventoryFilters) => {
 
 // Apply additional filters that need special handling
 const applySpecialFilters = (
-  mongooseQuery: any,
+  mongooseQuery: import('mongoose').Query<any, any>,
   filters: InventoryFilters
 ) => {
   // Expiring soon filter (items expiring within 3 days)
@@ -163,7 +183,7 @@ const applySpecialFilters = (
     threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
     const today = new Date();
 
-    mongooseQuery = mongooseQuery.where('expirationDate').gte(today).lte(threeDaysFromNow);
+    mongooseQuery = mongooseQuery.where('expirationDate').gte(today.getTime()).lte(threeDaysFromNow.getTime());
   }
 
   // Cost range filters
@@ -256,7 +276,13 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const updateData: any = { itemName, category, costPerUnit };
+    const updateData: {
+      itemName: string;
+      category: string;
+      costPerUnit: number;
+      expirationDate?: Date | null;
+      hasExpiration: boolean;
+    } = { itemName, category, costPerUnit, hasExpiration: hasExpiration !== undefined ? hasExpiration : true };
 
     // Only update expirationDate if hasExpiration is true and expirationDate is provided
     if (hasExpiration && expirationDate) {
@@ -264,8 +290,6 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     } else if (!hasExpiration) {
       updateData.expirationDate = null;
     }
-
-    updateData.hasExpiration = hasExpiration !== undefined ? hasExpiration : true;
 
     const updatedItem = await Inventory.findByIdAndUpdate(
       id,
