@@ -3,6 +3,42 @@ import { logger } from "../utils/logger.js";
 import Inventory from "../schemas/inventory.schema.js";
 import { AuthRequest } from "../types/auth.types.js";
 
+// Filter interfaces for type safety
+interface InventoryFilters {
+  category?: string;
+  hasExpiration?: boolean;
+  expiring_soon?: boolean;
+  min_cost?: number;
+  max_cost?: number;
+  search?: string;
+  sort_by?: 'createdAt' | 'itemName' | 'category' | 'costPerUnit' | 'expirationDate';
+  sort_order?: 'asc' | 'desc';
+}
+
+interface InventoryQueryParams {
+  category?: string;
+  hasExpiration?: string;
+  expiring_soon?: string;
+  min_cost?: string;
+  max_cost?: string;
+  search?: string;
+  sort_by?: string;
+  sort_order?: string;
+}
+
+interface FilteredInventoryResponse {
+  success: boolean;
+  message: string;
+  data: any[];
+  filters: InventoryFilters;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 // Add item to inventory
 export const addItem = async (req: AuthRequest, res: Response) => {
   try {
@@ -43,7 +79,118 @@ export const addItem = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Get user's inventory
+// Helper function to parse and validate filters
+const parseFilters = (query: InventoryQueryParams): InventoryFilters => {
+  const filters: InventoryFilters = {};
+
+  // Category filter (comma-separated values)
+  if (query.category) {
+    filters.category = query.category;
+  }
+
+  // Has expiration filter
+  if (query.hasExpiration !== undefined) {
+    filters.hasExpiration = query.hasExpiration === 'true';
+  }
+
+  // Expiring soon filter
+  if (query.expiring_soon === 'true') {
+    filters.expiring_soon = true;
+  }
+
+  // Cost range filters
+  if (query.min_cost && !isNaN(Number(query.min_cost))) {
+    filters.min_cost = Number(query.min_cost);
+  }
+
+  if (query.max_cost && !isNaN(Number(query.max_cost))) {
+    filters.max_cost = Number(query.max_cost);
+  }
+
+  // Search filter
+  if (query.search) {
+    filters.search = query.search.trim();
+  }
+
+  // Sort field with type safety
+  const validSortFields: Array<'createdAt' | 'itemName' | 'category' | 'costPerUnit' | 'expirationDate'> =
+    ['createdAt', 'itemName', 'category', 'costPerUnit', 'expirationDate'];
+
+  if (query.sort_by && validSortFields.includes(query.sort_by as any)) {
+    filters.sort_by = query.sort_by as any;
+  }
+
+  // Sort order
+  if (query.sort_order === 'asc' || query.sort_order === 'desc') {
+    filters.sort_order = query.sort_order;
+  }
+
+  return filters;
+};
+
+// Build MongoDB query from filters
+const buildInventoryQuery = (userId: string, filters: InventoryFilters) => {
+  // Base query - always filter by user
+  const query: any = { userId };
+
+  // Category filter (support multiple categories)
+  if (filters.category) {
+    const categories = filters.category.split(',').map(cat => cat.trim());
+    query.category = { $in: categories };
+  }
+
+  // Has expiration filter
+  if (filters.hasExpiration !== undefined) {
+    query.hasExpiration = filters.hasExpiration;
+  }
+
+  // Search filter (case-insensitive regex)
+  if (filters.search) {
+    query.itemName = { $regex: filters.search, $options: 'i' };
+  }
+
+  return query;
+};
+
+// Apply additional filters that need special handling
+const applySpecialFilters = (
+  mongooseQuery: any,
+  filters: InventoryFilters
+) => {
+  // Expiring soon filter (items expiring within 3 days)
+  if (filters.expiring_soon) {
+    const threeDaysFromNow = new Date();
+    threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+    const today = new Date();
+
+    mongooseQuery = mongooseQuery.where('expirationDate').gte(today).lte(threeDaysFromNow);
+  }
+
+  // Cost range filters
+  if (filters.min_cost !== undefined || filters.max_cost !== undefined) {
+    if (filters.min_cost !== undefined) {
+      mongooseQuery = mongooseQuery.where('costPerUnit').gte(filters.min_cost);
+    }
+    if (filters.max_cost !== undefined) {
+      mongooseQuery = mongooseQuery.where('costPerUnit').lte(filters.max_cost);
+    }
+  }
+
+  // Sorting
+  if (filters.sort_by) {
+    const sortOrder = filters.sort_order === 'asc' ? 1 : -1;
+    const sortOptions: any = {};
+    sortOptions[filters.sort_by] = sortOrder;
+    mongooseQuery = mongooseQuery.sort(sortOptions);
+  } else {
+    // Default sort by createdAt desc
+    mongooseQuery = mongooseQuery.sort({ createdAt: -1 });
+  }
+
+  return mongooseQuery;
+};
+
+// Get user's inventory with comprehensive filtering
 export const getInventory = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
@@ -53,13 +200,30 @@ export const getInventory = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const items = await Inventory.find({ userId: req.user.userId });
+    // Parse and validate filters
+    const filters = parseFilters(req.query as InventoryQueryParams);
 
-    res.status(200).json({
+    // Build base query
+    const baseQuery = buildInventoryQuery(req.user.userId, filters);
+
+    // Create mongoose query
+    let mongooseQuery = Inventory.find(baseQuery);
+
+    // Apply special filters (cost, expiration, sorting)
+    mongooseQuery = applySpecialFilters(mongooseQuery, filters);
+
+    // Execute query
+    const items = await mongooseQuery.exec();
+
+    // Build response with type safety
+    const response: FilteredInventoryResponse = {
       success: true,
       message: "Inventory retrieved successfully",
-      data: items
-    });
+      data: items,
+      filters: filters
+    };
+
+    res.status(200).json(response);
 
   } catch (error) {
     logger.error(`Get inventory error: ${(error as Error).message}`);
