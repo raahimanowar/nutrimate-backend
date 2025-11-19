@@ -34,6 +34,8 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
         address: user.address,
         profilePic: user.profilePic,
         dateOfBirth: user.dateOfBirth,
+        budgetPreferences: user.budgetPreferences,
+        dietaryNeeds: user.dietaryNeeds,
         role: user.role,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt
@@ -59,17 +61,37 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const { height, weight, address, profilePic, dateOfBirth } = req.body;
+    const {
+      height,
+      weight,
+      address,
+      profilePic,
+      dateOfBirth,
+      budgetPreferences,
+      dietaryNeeds
+    } = req.body;
+
+    const updateData: any = {
+      height,
+      weight,
+      address,
+      profilePic,
+      dateOfBirth
+    };
+
+    // Add budget preferences if provided
+    if (budgetPreferences) {
+      updateData.budgetPreferences = budgetPreferences;
+    }
+
+    // Add dietary needs if provided
+    if (dietaryNeeds) {
+      updateData.dietaryNeeds = dietaryNeeds;
+    }
 
     const updatedUser = await User.findByIdAndUpdate(
       req.user.userId,
-      {
-        height,
-        weight,
-        address,
-        profilePic,
-        dateOfBirth
-      },
+      updateData,
       { new: true, runValidators: true }
     ).select('-password');
 
@@ -94,6 +116,8 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
         address: updatedUser.address,
         profilePic: updatedUser.profilePic,
         dateOfBirth: updatedUser.dateOfBirth,
+        budgetPreferences: updatedUser.budgetPreferences,
+        dietaryNeeds: updatedUser.dietaryNeeds,
         role: updatedUser.role,
         updatedAt: updatedUser.updatedAt
       }

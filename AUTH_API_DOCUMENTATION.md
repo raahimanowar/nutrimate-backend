@@ -109,9 +109,28 @@ JWT token expires in 7 days and contains: userId, username, email
     },
     "profilePic": "string",
     "dateOfBirth": "date",
-    "role": "user",
-    "createdAt": "timestamp",
-    "updatedAt": "timestamp"
+    "budgetPreferences": {
+      "monthlyBudget": number,
+      "spendingCategories": {
+        "groceries": number,
+        "diningOut": number,
+        "supplements": number,
+        "other": number
+      }
+    },
+    "dietaryNeeds": {
+      "dietType": "string",
+      "allergies": ["string"],
+      "caloriesPerDay": number,
+      "macroTargets": {
+        "protein": number,
+        "carbs": number,
+        "fats": number
+      },
+      "waterIntakeGoal": number,
+      "avoidIngredients": ["string"]
+    },
+    "role": "user"
   }
 }
 ```
@@ -130,7 +149,28 @@ JWT token expires in 7 days and contains: userId, username, email
     "city": "string"
   },
   "profilePic": "string",
-  "dateOfBirth": "date"
+  "dateOfBirth": "date",
+  "budgetPreferences": {
+    "monthlyBudget": number,
+    "spendingCategories": {
+      "groceries": number,
+      "diningOut": number,
+      "supplements": number,
+      "other": number
+    }
+  },
+  "dietaryNeeds": {
+    "dietType": "balanced|plantBased|lowCarb|highProtein",
+    "allergies": ["string"],
+    "caloriesPerDay": number (800-5000),
+    "macroTargets": {
+      "protein": number (0-100),
+      "carbs": number (0-100),
+      "fats": number (0-100)
+    },
+    "waterIntakeGoal": number (glasses per day),
+    "avoidIngredients": ["string"]
+  }
 }
 ```
 
@@ -151,8 +191,28 @@ JWT token expires in 7 days and contains: userId, username, email
     },
     "profilePic": "string",
     "dateOfBirth": "date",
-    "role": "user",
-    "updatedAt": "timestamp"
+    "budgetPreferences": {
+      "monthlyBudget": number,
+      "spendingCategories": {
+        "groceries": number,
+        "diningOut": number,
+        "supplements": number,
+        "other": number
+      }
+    },
+    "dietaryNeeds": {
+      "dietType": "string",
+      "allergies": ["string"],
+      "caloriesPerDay": number,
+      "macroTargets": {
+        "protein": number,
+        "carbs": number,
+        "fats": number
+      },
+      "waterIntakeGoal": number,
+      "avoidIngredients": ["string"]
+    },
+    "role": "user"
   }
 }
 ```
