@@ -3,6 +3,7 @@ import { logger } from "../utils/logger.js";
 import Inventory from "../schemas/inventory.schema.js";
 import { AuthRequest } from "../types/auth.types.js";
 import { ObjectId } from "mongoose";
+import { body, validationResult } from "express-validator";
 
 // Filter interfaces for type safety
 interface InventoryFilters {
@@ -53,9 +54,52 @@ interface FilteredInventoryResponse {
   };
 }
 
+// Input validation rules
+export const validateInventoryItem = [
+  body('itemName')
+    .trim()
+    .notEmpty()
+    .withMessage('Item name is required')
+    .isLength({ min: 1, max: 100 })
+    .withMessage('Item name must be between 1 and 100 characters'),
+
+  body('category')
+    .isIn(['fruits', 'vegetables', 'dairy', 'grains', 'protein', 'beverages', 'snacks', 'other'])
+    .withMessage('Invalid category'),
+
+  body('costPerUnit')
+    .isFloat({ min: 0 })
+    .withMessage('Cost per unit must be a positive number'),
+
+  body('hasExpiration')
+    .isBoolean()
+    .withMessage('Has expiration must be a boolean'),
+
+  body('expirationDate')
+    .if(body('hasExpiration').equals('true'))
+    .isISO8601()
+    .withMessage('Valid expiration date is required when hasExpiration is true')
+    .custom(value => {
+      if (value && new Date(value) <= new Date()) {
+        throw new Error('Expiration date must be in the future');
+      }
+      return true;
+    })
+];
+
 // Add item to inventory
 export const addItem = async (req: AuthRequest, res: Response) => {
   try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: errors.array()
+      });
+    }
+
     if (!req.user) {
       return res.status(401).json({
         success: false,
@@ -66,7 +110,7 @@ export const addItem = async (req: AuthRequest, res: Response) => {
     const { itemName, category, expirationDate, hasExpiration, costPerUnit } = req.body;
 
     const newItem = new Inventory({
-      itemName,
+      itemName: itemName.trim(),
       category,
       expirationDate: hasExpiration && expirationDate ? new Date(expirationDate) : null,
       hasExpiration: hasExpiration !== undefined ? hasExpiration : true,

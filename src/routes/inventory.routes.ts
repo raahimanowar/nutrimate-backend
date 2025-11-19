@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { addItem, getInventory, updateItem, deleteItem } from "../controllers/inventory.controller.js";
+import { addItem, getInventory, updateItem, deleteItem, validateInventoryItem } from "../controllers/inventory.controller.js";
 import { authenticateToken } from "../middleware/auth.middleware.js";
 
 const router = Router();
@@ -8,7 +8,7 @@ const router = Router();
 router.use(authenticateToken);
 
 // Add item to inventory
-router.post("/", addItem);
+router.post("/", validateInventoryItem, addItem);
 
 // Get user's inventory
 router.get("/", getInventory);
