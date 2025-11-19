@@ -8,6 +8,7 @@ import { connectDB } from "./db/db.js";
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import inventoryRoutes from "./routes/inventory.routes.js";
+import dailyLogRoutes from "./routes/daily-log.routes.js";
 
 dotenv.config();
 
@@ -64,6 +65,9 @@ app.use("/api/users", userRoutes);
 
 // Inventory routes (protected)
 app.use("/api/inventory", inventoryRoutes);
+
+// Daily log routes (protected)
+app.use("/api/daily-log", dailyLogRoutes);
 
 // API info route
 app.get("/api", (_req, res) => {
