@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { register, login } from "../controllers/auth.controller.js";
 
@@ -12,19 +12,22 @@ const registerSchema = z.object({
 });
 
 // Signup route
-router.post("/signup", async (req, res) => {
+router.post("/signup", async (req: Request, res: Response) => {
   try {
     // Validate input
     const validatedData = registerSchema.parse(req.body);
 
+    // Create new request object with validated body
+    const modifiedReq = { ...req, body: validatedData };
+
     // Call register controller
-    await register({ ...req, body: validatedData }, res);
+    await register(modifiedReq as Request, res);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         success: false,
         message: "Validation error",
-        errors: error.errors.map(err => ({
+        errors: error.issues.map(err => ({
           field: err.path.join('.'),
           message: err.message
         }))
@@ -43,19 +46,22 @@ const loginSchema = z.object({
 });
 
 // Signin route
-router.post("/signin", async (req, res) => {
+router.post("/signin", async (req: Request, res: Response) => {
   try {
     // Validate input
     const validatedData = loginSchema.parse(req.body);
 
+    // Create new request object with validated body
+    const modifiedReq = { ...req, body: validatedData };
+
     // Call login controller
-    await login({ ...req, body: validatedData }, res);
+    await login(modifiedReq as Request, res);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         success: false,
         message: "Validation error",
-        errors: error.errors.map(err => ({
+        errors: error.issues.map(err => ({
           field: err.path.join('.'),
           message: err.message
         }))
