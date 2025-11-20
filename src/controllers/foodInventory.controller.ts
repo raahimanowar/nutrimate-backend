@@ -10,7 +10,8 @@ export const getFoodInventory = async (req: Request, res: Response) => {
     if (category) query.category = (category as string).toLowerCase();
 
     const items = await FoodInventory.find(query).sort({ name: 1 });
-
+    console.log(items);
+    
     res.json({
       success: true,
       items,
