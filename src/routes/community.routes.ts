@@ -47,7 +47,12 @@ const validateCreateCommunity = [
 const validateCommunityId = [
   param('communityId')
     .isMongoId()
-    .withMessage('Invalid community ID')
+    .withMessage('Invalid community ID'),
+
+  query('category')
+    .optional()
+    .isIn(['general', 'tips', 'food-sharing'])
+    .withMessage('Category must be general, tips, or food-sharing')
 ];
 
 const validateCreatePost = [
@@ -60,7 +65,12 @@ const validateCreatePost = [
     .notEmpty()
     .withMessage('Post content is required')
     .isLength({ min: 1, max: 1000 })
-    .withMessage('Post content must be between 1 and 1000 characters')
+    .withMessage('Post content must be between 1 and 1000 characters'),
+
+  body('category')
+    .optional()
+    .isIn(['general', 'tips', 'food-sharing'])
+    .withMessage('Category must be general, tips, or food-sharing')
 ];
 
 const validateVote = [

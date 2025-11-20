@@ -118,7 +118,8 @@
 **Request:**
 ```json
 {
-  "content": "Just finished a great workout session! Who else is active today?"
+  "content": "Just finished a great workout session! Who else is active today?",
+  "category": "general"
 }
 ```
 
@@ -137,6 +138,7 @@
       "profilePic": "https://example.com/profile.jpg"
     },
     "content": "Just finished a great workout session! Who else is active today?",
+    "category": "general",
     "upvotesCount": 0,
     "downvotesCount": 0,
     "userVote": null,
@@ -153,6 +155,7 @@
 **Query Parameters:**
 - `page` (optional): Page number (default: 1)
 - `limit` (optional): Posts per page (default: 10)
+- `category` (optional): Filter by category (general, tips, food-sharing)
 
 **Success (200):**
 ```json
@@ -169,6 +172,7 @@
         "profilePic": "https://example.com/profile.jpg"
       },
       "content": "Just finished a great workout session! Who else is active today?",
+      "category": "general",
       "upvotesCount": 5,
       "downvotesCount": 1,
       "userVote": null,
@@ -328,6 +332,7 @@
   community: ObjectId;   // Community reference
   author: ObjectId;      // User who created post
   content: string;       // Required, max 1000 chars
+  category: string;      // Required: general, tips, food-sharing (default: general)
   upvotes: ObjectId[];   // Users who upvoted
   downvotes: ObjectId[]; // Users who downvoted
 }
@@ -389,8 +394,24 @@ fetch('/api/communities/64f8a1b2c3d4e5f6a7b8c9d0/posts', {
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
-    content: "Just finished a great workout session! Who else is active today?"
+    content: "Just finished a great workout session! Who else is active today?",
+    category: "general"
   })
+});
+```
+
+**Get Posts by Category:**
+```javascript
+// Get all tips posts
+fetch('/api/communities/64f8a1b2c3d4e5f6a7b8c9d0/posts?category=tips', {
+  method: 'GET',
+  headers: { 'Authorization': 'Bearer ' + token }
+});
+
+// Get food-sharing posts
+fetch('/api/communities/64f8a1b2c3d4e5f6a7b8c9d0/posts?category=food-sharing', {
+  method: 'GET',
+  headers: { 'Authorization': 'Bearer ' + token }
 });
 ```
 
@@ -462,3 +483,5 @@ fetch('/api/communities/64f8a1b2c3d4e5f6a7b8c9d0/posts/64f8a1b2c3d4e5f6a7b8c9d5/
 - All endpoints require authentication
 - Posts sorted by newest, comments by oldest
 - Posts: max 1000 chars, Comments: max 500 chars
+- Post categories: general (default), tips, food-sharing
+- Posts can be filtered by category when retrieving

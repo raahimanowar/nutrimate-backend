@@ -280,7 +280,7 @@ export const createCommunityPost = async (req: AuthRequest, res: Response) => {
     }
 
     const { communityId } = req.params;
-    const { content } = req.body;
+    const { content, category } = req.body;
 
     if (!communityId) {
       return res.status(400).json({
@@ -317,7 +317,8 @@ export const createCommunityPost = async (req: AuthRequest, res: Response) => {
     const post = new CommunityPost({
       community: communityId,
       author: req.user.userId,
-      content: content.trim()
+      content: content.trim(),
+      category: category || 'general'
     });
 
     await post.save();
@@ -333,6 +334,7 @@ export const createCommunityPost = async (req: AuthRequest, res: Response) => {
         community: post.community,
         author: post.author,
         content: post.content,
+        category: post.category,
         upvotesCount: post.upvotes.length,
         downvotesCount: post.downvotes.length,
         userVote: null,
@@ -362,6 +364,7 @@ export const getCommunityPosts = async (req: AuthRequest, res: Response) => {
     const { communityId } = req.params;
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
+    const category = req.query.category as string;
     const skip = (page - 1) * limit;
 
     if (!communityId) {
@@ -388,14 +391,20 @@ export const getCommunityPosts = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    // Build query with category filter
+    const query: any = { community: communityId };
+    if (category && ['general', 'tips', 'food-sharing'].includes(category)) {
+      query.category = category;
+    }
+
     // Get posts
     const [posts, total] = await Promise.all([
-      CommunityPost.find({ community: communityId })
+      CommunityPost.find(query)
         .populate('author', 'username email profilePic')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
-      CommunityPost.countDocuments({ community: communityId })
+      CommunityPost.countDocuments(query)
     ]);
 
     res.status(200).json({
@@ -413,6 +422,7 @@ export const getCommunityPosts = async (req: AuthRequest, res: Response) => {
           _id: post._id,
           author: post.author,
           content: post.content,
+          category: post.category,
           upvotesCount: post.upvotes.length,
           downvotesCount: post.downvotes.length,
           userVote,

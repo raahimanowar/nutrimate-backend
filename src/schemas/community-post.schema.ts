@@ -5,6 +5,7 @@ export interface CommunityPostDocument extends Document {
   community: mongoose.Types.ObjectId; // Reference to Community
   author: mongoose.Types.ObjectId;    // Reference to User who created the post
   content: string;                    // Post content
+  category: "general" | "tips" | "food-sharing"; // Post category
   upvotes: mongoose.Types.ObjectId[]; // Users who upvoted
   downvotes: mongoose.Types.ObjectId[]; // Users who downvoted
   createdAt: Date;
@@ -29,6 +30,12 @@ const CommunityPostSchema: Schema = new Schema({
     trim: true,
     maxlength: 1000
   },
+  category: {
+    type: String,
+    required: true,
+    enum: ["general", "tips", "food-sharing"],
+    default: "general"
+  },
   upvotes: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: "User"
@@ -44,6 +51,7 @@ const CommunityPostSchema: Schema = new Schema({
 
 // Index for faster queries
 CommunityPostSchema.index({ community: 1, createdAt: -1 });
+CommunityPostSchema.index({ community: 1, category: 1, createdAt: -1 });
 CommunityPostSchema.index({ author: 1 });
 CommunityPostSchema.index({ upvotes: 1 });
 CommunityPostSchema.index({ downvotes: 1 });
