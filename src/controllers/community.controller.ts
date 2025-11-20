@@ -1,10 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Response } from "express";
 import { logger } from "../utils/logger.js";
 import Community from "../schemas/community.schema.js";
 import CommunityPost from "../schemas/community-post.schema.js";
 import Comment from "../schemas/comment.schema.js";
-import User from "../schemas/user.schema.js";
 import { AuthRequest } from "../types/auth.types.js";
+
 
 // Create a new community
 export const createCommunity = async (req: AuthRequest, res: Response) => {
@@ -123,6 +124,63 @@ export const joinCommunity = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Get a single community's details
+export const getCommunityDetails = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required"
+      });
+    }
+
+    const { communityId } = req.params;
+
+    if (!communityId) {
+      return res.status(400).json({
+        success: false,
+        message: "Community ID is required"
+      });
+    }
+
+    // Find community and populate admin details
+    const community = await Community.findById(communityId)
+      .populate('admin', 'username email profilePic')
+      .populate('members', 'username email profilePic');
+
+    if (!community) {
+      return res.status(404).json({
+        success: false,
+        message: "Community not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Community details retrieved successfully",
+      data: {
+        _id: community._id,
+        name: community.name,
+        location: community.location,
+        description: community.description,
+        admin: community.admin,
+        members: community.members,
+        membersCount: community.members.length,
+        isMember: community.members.some((member: any) => member._id.toString() === req.user?.userId),
+        isAdmin: community.admin._id.toString() === req.user?.userId,
+        createdAt: community.createdAt
+      }
+    });
+
+  } catch (error) {
+    logger.error(`Get community details error: ${(error as Error).message}`);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error while fetching community details"
+    });
+  }
+};
+
 // Get all communities
 export const getAllCommunities = async (req: AuthRequest, res: Response) => {
   try {
@@ -147,8 +205,8 @@ export const getAllCommunities = async (req: AuthRequest, res: Response) => {
         description: community.description,
         admin: community.admin,
         membersCount: community.members.length,
-        isMember: community.members.includes(req.user.userId as any),
-        isAdmin: community.admin.toString() === req.user.userId.toString(),
+        isMember: req.user ? community.members.includes(req.user.userId as any) : false,
+        isAdmin: req.user ? community.admin.toString() === req.user.userId.toString() : false,
         createdAt: community.createdAt
       }))
     });
@@ -191,7 +249,7 @@ export const getUserCommunities = async (req: AuthRequest, res: Response) => {
         description: community.description,
         admin: community.admin,
         membersCount: community.members.length,
-        isAdmin: community.admin.toString() === req.user.userId.toString(),
+        isAdmin: req.user ? community.admin.toString() === req.user.userId.toString() : false,
         createdAt: community.createdAt
       }))
     });
@@ -412,9 +470,9 @@ export const getCommunityPosts = async (req: AuthRequest, res: Response) => {
       message: "Posts retrieved successfully",
       data: posts.map(post => {
         let userVote = null;
-        if (post.upvotes.includes(req.user.userId as any)) {
+        if (req.user && post.upvotes.includes(req.user.userId as any)) {
           userVote = 'upvote';
-        } else if (post.downvotes.includes(req.user.userId as any)) {
+        } else if (req.user && post.downvotes.includes(req.user.userId as any)) {
           userVote = 'downvote';
         }
 
@@ -499,8 +557,8 @@ export const votePost = async (req: AuthRequest, res: Response) => {
     }
 
     // Remove user from both vote arrays first
-    post.upvotes = post.upvotes.filter(id => id.toString() !== req.user.userId?.toString());
-    post.downvotes = post.downvotes.filter(id => id.toString() !== req.user.userId?.toString());
+    post.upvotes = post.upvotes.filter(id => req.user ? id.toString() !== req.user.userId?.toString() : true);
+    post.downvotes = post.downvotes.filter(id => req.user ? id.toString() !== req.user.userId?.toString() : true);
 
     // Add user to the appropriate vote array
     if (voteType === 'upvote') {
@@ -678,9 +736,9 @@ export const getComments = async (req: AuthRequest, res: Response) => {
       message: "Comments retrieved successfully",
       data: comments.map(comment => {
         let userVote = null;
-        if (comment.upvotes.includes(req.user.userId as any)) {
+        if (req.user && comment.upvotes.includes(req.user.userId as any)) {
           userVote = 'upvote';
-        } else if (comment.downvotes.includes(req.user.userId as any)) {
+        } else if (req.user && comment.downvotes.includes(req.user.userId as any)) {
           userVote = 'downvote';
         }
 
@@ -764,8 +822,8 @@ export const voteComment = async (req: AuthRequest, res: Response) => {
     }
 
     // Remove user from both vote arrays first
-    comment.upvotes = comment.upvotes.filter(id => id.toString() !== req.user.userId?.toString());
-    comment.downvotes = comment.downvotes.filter(id => id.toString() !== req.user.userId?.toString());
+    comment.upvotes = comment.upvotes.filter(id => req.user ? id.toString() !== req.user.userId?.toString() : true);
+    comment.downvotes = comment.downvotes.filter(id => req.user ? id.toString() !== req.user.userId?.toString() : true);
 
     // Add user to the appropriate vote array
     if (voteType === 'upvote') {
@@ -791,6 +849,84 @@ export const voteComment = async (req: AuthRequest, res: Response) => {
     res.status(500).json({
       success: false,
       message: "Internal server error while voting on comment"
+    });
+  }
+};
+
+// Remove a user from community (Admin only)
+export const removeUserFromCommunity = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required"
+      });
+    }
+
+    const { communityId, userId } = req.params;
+
+    if (!communityId || !userId) {
+      return res.status(400).json({
+        success: false,
+        message: "Community ID and User ID are required"
+      });
+    }
+
+    // Find community
+    const community = await Community.findById(communityId);
+
+    if (!community) {
+      return res.status(404).json({
+        success: false,
+        message: "Community not found"
+      });
+    }
+
+    // Check if requester is admin
+    if (community.admin.toString() !== req.user.userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Only admin can remove members"
+      });
+    }
+
+    // Check if user is trying to remove themselves (admin)
+    if (userId === req.user.userId.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: "Admin cannot remove themselves"
+      });
+    }
+
+    // Check if user is in the community
+    if (!community.members.includes(userId as any)) {
+      return res.status(404).json({
+        success: false,
+        message: "User is not a member of this community"
+      });
+    }
+
+    // Remove user from members
+    community.members = community.members.filter(
+      (memberId: any) => memberId.toString() !== userId
+    );
+
+    await community.save();
+
+    res.status(200).json({
+      success: true,
+      message: "User removed from community successfully",
+      data: {
+        _id: community._id,
+        membersCount: community.members.length
+      }
+    });
+
+  } catch (error) {
+    logger.error(`Remove user from community error: ${(error as Error).message}`);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error while removing user"
     });
   }
 };

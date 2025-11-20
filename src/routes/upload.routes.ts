@@ -4,7 +4,19 @@ import { uploadProfilePicture, deleteProfilePicture } from "../controllers/uploa
 import multer from 'multer';
 
 // Configure multer for memory storage
-const upload = multer({
+interface UploadLimits {
+  fileSize: number;
+}
+
+type UploadFileFilter = (req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => void;
+
+interface UploadConfig {
+  storage: multer.StorageEngine;
+  limits: UploadLimits;
+  fileFilter: UploadFileFilter;
+}
+
+const uploadOptions: UploadConfig = {
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB limit
@@ -17,7 +29,9 @@ const upload = multer({
       cb(new Error('Only image files are allowed'));
     }
   }
-});
+};
+
+const upload = multer(uploadOptions);
 
 const router = Router();
 

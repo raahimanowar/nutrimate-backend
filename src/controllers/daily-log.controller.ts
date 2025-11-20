@@ -71,8 +71,7 @@ export const getDailyLogs = async (req: AuthRequest, res: Response) => {
     const query = req.query as DailyLogQueryParams;
 
     // Build date filter
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let dateFilter: any = {};
+    let dateFilter: Record<string, Date> = {};
     if (query.date) {
       const targetDate = new Date(query.date);
       const startOfDay = new Date(targetDate);
@@ -88,8 +87,7 @@ export const getDailyLogs = async (req: AuthRequest, res: Response) => {
     }
 
     // Build base query
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mongoQuery: any = { userId: req.user.userId };
+    const mongoQuery: Record<string, unknown> = { userId: req.user.userId };
     if (Object.keys(dateFilter).length > 0) {
       mongoQuery.date = dateFilter;
     }
@@ -97,8 +95,7 @@ export const getDailyLogs = async (req: AuthRequest, res: Response) => {
     // Sort options
     const sortField = query.sortBy || 'date';
     const sortOrder = query.sortOrder === 'asc' ? 1 : -1;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sortOptions: any = { [sortField]: sortOrder };
+    const sortOptions: Record<string, 1 | -1> = { [sortField]: sortOrder };
 
     // Pagination
     const page = parseInt(query.page || '1');
@@ -274,10 +271,9 @@ export const updateDailyLogItem = async (req: AuthRequest, res: Response) => {
     }
 
     // Find and update item
-    const itemIndex = dailyLog.items.findIndex(item => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (item as any)._id?.toString() === itemId;
-    });
+    const itemIndex = dailyLog.items.findIndex(item =>
+      item._id?.toString() === itemId
+    );
 
     if (itemIndex === -1) {
       return res.status(404).json({
@@ -365,10 +361,9 @@ export const deleteDailyLogItem = async (req: AuthRequest, res: Response) => {
     }
 
     // Remove item
-    const itemIndex = dailyLog.items.findIndex(item => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (item as any)._id?.toString() === itemId;
-    });
+    const itemIndex = dailyLog.items.findIndex(item =>
+      item._id?.toString() === itemId
+    );
 
     if (itemIndex === -1) {
       return res.status(404).json({
@@ -593,8 +588,7 @@ export const getAllTimeConsumptionHistory = async (req: AuthRequest, res: Respon
     const skip = (pageNum - 1) * limitNum;
 
     // Build sort options
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sortOptions: any = {};
+    const sortOptions: Record<string, 1 | -1> = {};
     if (sortBy === 'date') {
       sortOptions.date = sortOrder === 'asc' ? 1 : -1;
     } else if (sortBy === 'totalCalories') {
