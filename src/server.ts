@@ -18,6 +18,10 @@ dotenv.config();
 
 const app = express();
 
+// ---------------- PROXY CONFIGURATION ----------------
+// Trust proxy settings for proper rate limiting behind reverse proxies
+app.set('trust proxy', process.env.TRUST_PROXY || true);
+
 // ---------------- SECURITY MIDDLEWARE ----------------
 app.use(helmet()); // Security headers
 
@@ -46,6 +50,10 @@ const limiter = rateLimit({
   legacyHeaders: false,
   // Skip rate limiting for OPTIONS requests (CORS preflight)
   skip: (req) => req.method === "OPTIONS",
+  // Ensure proper IP identification when trust proxy is enabled
+  keyGenerator: (req) => {
+    return req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
+  },
 });
 
 app.use(limiter); // Apply rate limiting after CORS
