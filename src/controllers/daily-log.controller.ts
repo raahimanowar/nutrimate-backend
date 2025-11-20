@@ -286,9 +286,11 @@ export const updateDailyLogItem = async (req: AuthRequest, res: Response) => {
     Object.keys(updateData).forEach(key => {
       if (updateData[key] !== undefined && key !== '_id') {
         if (key === 'itemName') {
-          dailyLog.items[itemIndex][key] = updateData[key].trim();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (dailyLog.items[itemIndex] as any)[key] = updateData[key].trim();
         } else {
-          dailyLog.items[itemIndex][key] = updateData[key];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (dailyLog.items[itemIndex] as any)[key] = updateData[key];
         }
       }
     });
@@ -453,7 +455,16 @@ export const updateWaterIntake = async (req: AuthRequest, res: Response) => {
         _id: dailyLog._id,
         userId: dailyLog.userId,
         date: dailyLog.date.toISOString().split('T')[0],
+        items: dailyLog.items,
+        totalCalories: dailyLog.totalCalories,
+        totalProtein: dailyLog.totalProtein,
+        totalCarbs: dailyLog.totalCarbs,
+        totalFats: dailyLog.totalFats,
+        totalFiber: dailyLog.totalFiber,
+        totalSugar: dailyLog.totalSugar,
+        totalSodium: dailyLog.totalSodium,
         waterIntake: dailyLog.waterIntake,
+        createdAt: dailyLog.createdAt,
         updatedAt: dailyLog.updatedAt
       }
     });

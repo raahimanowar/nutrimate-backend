@@ -12,6 +12,7 @@ import dailyLogRoutes from "./routes/daily-log.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
 import communityRoutes from "./routes/community.routes.js";
 import resourceRoutes from "./routes/resource.route.js";
+import trackingRoutes from "./routes/tracking.routes.js";
 
 dotenv.config();
 
@@ -82,6 +83,7 @@ app.use("/api/resources", resourceRoutes);
 // Upload routes (protected)
 app.use("/api/upload", uploadRoutes);
 
+app.use("/api/tracking", trackingRoutes);
 // Community routes (protected)
 app.use("/api/communities", communityRoutes);
 
@@ -96,7 +98,6 @@ app.get("/api", (_req, res) => {
   };
   res.json(response);
 });
-
 
 // ---------------- SERVER ----------------
 const port = Number(process.env.PORT) || 5000;

@@ -1,6 +1,7 @@
 import { Request } from "express";
 
 export interface DailyLogItem {
+  _id?: string | object;
   itemName: string;
   quantity: number;
   unit: string;
