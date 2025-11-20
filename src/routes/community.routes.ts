@@ -1,11 +1,14 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Router } from "express";
 import { authenticateToken } from "../middleware/auth.middleware.js";
 import {
   createCommunity,
   joinCommunity,
+  getCommunityDetails,
   getAllCommunities,
   getUserCommunities,
   leaveCommunity,
+  removeUserFromCommunity,
   createCommunityPost,
   getCommunityPosts,
   votePost,
@@ -13,7 +16,7 @@ import {
   getComments,
   voteComment
 } from "../controllers/community.controller.js";
-import { body, param, validationResult } from "express-validator";
+import { body, param, query, validationResult } from "express-validator";
 
 const router = Router();
 
@@ -93,18 +96,14 @@ const validatePostId = [
     .withMessage('Invalid post ID')
 ];
 
-const validateCommentId = [
+const validateRemoveUser = [
   param('communityId')
     .isMongoId()
     .withMessage('Invalid community ID'),
 
-  param('postId')
+  param('userId')
     .isMongoId()
-    .withMessage('Invalid post ID'),
-
-  param('commentId')
-    .isMongoId()
-    .withMessage('Invalid comment ID')
+    .withMessage('Invalid user ID')
 ];
 
 const validateCreateComment = [
@@ -131,7 +130,7 @@ const handleValidationErrors = (req: any, res: any, next: any) => {
     return res.status(400).json({
       success: false,
       message: "Validation failed",
-      errors: errors.array().map(error => ({
+      errors: errors.array().map((error: any) => ({
         field: error.param,
         message: error.msg
       }))
@@ -148,6 +147,9 @@ router.post("/", validateCreateCommunity, handleValidationErrors, createCommunit
 // Get all communities (with user membership info)
 router.get("/", getAllCommunities);
 
+// Get a single community's details
+router.get("/:communityId", validateCommunityId, handleValidationErrors, getCommunityDetails);
+
 // Get communities the user is a member of
 router.get("/my-communities", getUserCommunities);
 
@@ -156,6 +158,9 @@ router.post("/:communityId/join", validateCommunityId, handleValidationErrors, j
 
 // Leave a community
 router.post("/:communityId/leave", validateCommunityId, handleValidationErrors, leaveCommunity);
+
+// Remove a user from community (Admin only)
+router.delete("/:communityId/members/:userId", validateRemoveUser, handleValidationErrors, removeUserFromCommunity);
 
 // Create a post in community
 router.post("/:communityId/posts", validateCreatePost, handleValidationErrors, createCommunityPost);
