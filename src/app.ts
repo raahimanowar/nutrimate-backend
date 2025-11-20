@@ -29,10 +29,7 @@ app.use(helmet()); // Security headers
 // ---------------- CORE MIDDLEWARE ----------------
 app.use(
   cors({
-    origin:
-      process.env.NODE_ENV === "production"
-        ? ["https://nutrimate-bice.vercel.app"]
-        : "*",
+    origin: "https://nutrimate-bice.vercel.app",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
