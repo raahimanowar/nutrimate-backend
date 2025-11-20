@@ -1,9 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Response } from "express";
 import mongoose from "mongoose";
 import { logger } from "../utils/logger.js";
 import cloudinary from "../utils/cloudinary.js";
-import streamifier from 'streamifier';
-import FoodImage, { FoodImageDocument, FoodImageType } from "../schemas/food-image.schema.js";
+import streamifier from "streamifier";
+import FoodImage, { FoodImageType } from "../schemas/food-image.schema.js";
 import { AuthRequest } from "../types/auth.types.js";
 
 interface CloudinaryUploadResult {
@@ -13,91 +14,93 @@ interface CloudinaryUploadResult {
   format: string;
 }
 
-// Upload food image (receipt, food label, meal photo)
 export const uploadFoodImage = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({
         success: false,
-        message: "Authentication required"
+        message: "Authentication required",
       });
     }
 
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: "No image file provided"
+        message: "No image file provided",
       });
     }
 
-    // Check file type (only allow JPG and PNG as specified)
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png"];
     if (!allowedTypes.includes(req.file.mimetype)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid file type. Only JPEG and PNG images are allowed"
+        message: "Invalid file type. Only JPEG and PNG images are allowed",
       });
     }
 
-    // Check file size (max 10MB for food images)
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 10 * 1024 * 1024;
     if (req.file.size > maxSize) {
       return res.status(400).json({
         success: false,
-        message: "File size too large. Maximum size is 10MB"
+        message: "File size too large. Maximum size is 10MB",
       });
     }
 
     const { title, description, imageType = "receipt", tags } = req.body;
     const imageBuffer = req.file.buffer;
 
-    // Validate required fields
     if (!title || title.trim().length === 0) {
       return res.status(400).json({
         success: false,
-        message: "Title is required"
+        message: "Title is required",
       });
     }
 
-    // Validate image type
-    if (!["receipt", "food_label", "meal_photo", "ingredient"].includes(imageType)) {
+    if (
+      !["receipt", "food_label", "meal_photo", "ingredient"].includes(imageType)
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid image type. Must be receipt, food_label, meal_photo, or ingredient"
+        message:
+          "Invalid image type. Must be receipt, food_label, meal_photo, or ingredient",
       });
     }
 
-    // Parse tags if provided
     let parsedTags: string[] = [];
     if (tags) {
-      if (typeof tags === 'string') {
-        parsedTags = tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+      if (typeof tags === "string") {
+        parsedTags = tags
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter((tag) => tag.length > 0);
       } else if (Array.isArray(tags)) {
-        parsedTags = tags.map(tag => tag.toString().trim()).filter(tag => tag.length > 0);
+        parsedTags = tags
+          .map((tag) => tag.toString().trim())
+          .filter((tag) => tag.length > 0);
       }
     }
 
-    // Upload image to Cloudinary
-    const cloudinaryResult = await new Promise<CloudinaryUploadResult>((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        {
-          folder: 'nutrimate_food_scans',
-          resource_type: 'auto',
-          transformation: [
-            { quality: 'auto:good' }, // Optimize quality
-            { fetch_format: 'auto' } // Serve optimal format
-          ]
-        },
-        (err, result) => {
-          if (err) return reject(err);
-          if (!result) return reject(new Error('No result from Cloudinary'));
-          resolve(result as CloudinaryUploadResult);
-        }
-      );
-      streamifier.createReadStream(imageBuffer).pipe(stream);
-    });
+    const cloudinaryResult = await new Promise<CloudinaryUploadResult>(
+      (resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder: "nutrimate_food_scans",
+            resource_type: "auto",
+            transformation: [
+              { quality: "auto:good" },
+              { fetch_format: "auto" },
+            ],
+          },
+          (err, result) => {
+            if (err) return reject(err);
+            if (!result) return reject(new Error("No result from Cloudinary"));
+            resolve(result as CloudinaryUploadResult);
+          }
+        );
+        streamifier.createReadStream(imageBuffer).pipe(stream);
+      }
+    );
 
-    // Create food image document
     const foodImage = new FoodImage({
       userId: req.user.userId,
       title: title.trim(),
@@ -106,13 +109,13 @@ export const uploadFoodImage = async (req: AuthRequest, res: Response) => {
       cloudinaryPublicId: cloudinaryResult.public_id,
       imageType: imageType as FoodImageType,
       tags: parsedTags,
-      associationType: "none", // Initially unassociated
-      scanStatus: "manual_only", // No processing required in Part 1
+      associationType: "none",
+      scanStatus: "manual_only",
       metadata: {
         originalFileName: req.file.originalname,
         fileSize: req.file.size,
-        mimeType: req.file.mimetype
-      }
+        mimeType: req.file.mimetype,
+      },
     });
 
     await foodImage.save();
@@ -132,10 +135,9 @@ export const uploadFoodImage = async (req: AuthRequest, res: Response) => {
         associationType: foodImage.associationType,
         scanStatus: foodImage.scanStatus,
         metadata: foodImage.metadata,
-        createdAt: foodImage.createdAt
-      }
+        createdAt: foodImage.createdAt,
+      },
     });
-
   } catch (error) {
     const errorMessage = (error as Error).message;
     logger.error(`Food image upload error: ${errorMessage}`);
@@ -143,18 +145,17 @@ export const uploadFoodImage = async (req: AuthRequest, res: Response) => {
     res.status(500).json({
       success: false,
       message: "Internal server error while uploading food image",
-      error: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      error: process.env.NODE_ENV === "development" ? errorMessage : undefined,
     });
   }
 };
 
-// Get user's food images
 export const getUserFoodImages = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({
         success: false,
-        message: "Authentication required"
+        message: "Authentication required",
       });
     }
 
@@ -163,40 +164,43 @@ export const getUserFoodImages = async (req: AuthRequest, res: Response) => {
       associationType,
       page = 1,
       limit = 20,
-      sortBy = 'createdAt',
-      sortOrder = 'desc'
+      sortBy = "createdAt",
+      sortOrder = "desc",
     } = req.query;
 
     const pageNum = Math.max(1, parseInt(page as string) || 1);
     const limitNum = Math.min(50, Math.max(1, parseInt(limit as string) || 20));
     const skip = (pageNum - 1) * limitNum;
 
-    // Build query
     const query: any = { userId: req.user.userId };
 
-    if (imageType && ["receipt", "food_label", "meal_photo", "ingredient"].includes(imageType as string)) {
+    if (
+      imageType &&
+      ["receipt", "food_label", "meal_photo", "ingredient"].includes(
+        imageType as string
+      )
+    ) {
       query.imageType = imageType;
     }
 
-    if (associationType && ["inventory", "daily_log", "none"].includes(associationType as string)) {
+    if (
+      associationType &&
+      ["inventory", "daily_log", "none"].includes(associationType as string)
+    ) {
       query.associationType = associationType;
     }
 
-    // Build sort object
     const sort: any = {};
-    const validSortFields = ['createdAt', 'title', 'imageType', 'scanStatus'];
-    const sortField = validSortFields.includes(sortBy as string) ? sortBy as string : 'createdAt';
-    const sortDirection = sortOrder === 'asc' ? 1 : -1;
+    const validSortFields = ["createdAt", "title", "imageType", "scanStatus"];
+    const sortField = validSortFields.includes(sortBy as string)
+      ? (sortBy as string)
+      : "createdAt";
+    const sortDirection = sortOrder === "asc" ? 1 : -1;
     sort[sortField] = sortDirection;
 
-    // Get images with pagination
     const [images, totalCount] = await Promise.all([
-      FoodImage.find(query)
-        .sort(sort)
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      FoodImage.countDocuments(query)
+      FoodImage.find(query).sort(sort).skip(skip).limit(limitNum).lean(),
+      FoodImage.countDocuments(query),
     ]);
 
     const totalPages = Math.ceil(totalCount / limitNum);
@@ -205,7 +209,7 @@ export const getUserFoodImages = async (req: AuthRequest, res: Response) => {
       success: true,
       message: "Food images retrieved successfully",
       data: {
-        images: images.map(image => ({
+        images: images.map((image) => ({
           id: image._id,
           title: image.title,
           description: image.description,
@@ -217,7 +221,7 @@ export const getUserFoodImages = async (req: AuthRequest, res: Response) => {
           scanStatus: image.scanStatus,
           metadata: image.metadata,
           createdAt: image.createdAt,
-          updatedAt: image.updatedAt
+          updatedAt: image.updatedAt,
         })),
         pagination: {
           currentPage: pageNum,
@@ -225,27 +229,25 @@ export const getUserFoodImages = async (req: AuthRequest, res: Response) => {
           totalItems: totalCount,
           itemsPerPage: limitNum,
           hasNextPage: pageNum < totalPages,
-          hasPrevPage: pageNum > 1
-        }
-      }
+          hasPrevPage: pageNum > 1,
+        },
+      },
     });
-
   } catch (error) {
     logger.error(`Get food images error: ${(error as Error).message}`);
     res.status(500).json({
       success: false,
-      message: "Internal server error while retrieving food images"
+      message: "Internal server error while retrieving food images",
     });
   }
 };
 
-// Get single food image by ID
 export const getFoodImageById = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({
         success: false,
-        message: "Authentication required"
+        message: "Authentication required",
       });
     }
 
@@ -254,19 +256,19 @@ export const getFoodImageById = async (req: AuthRequest, res: Response) => {
     if (!id) {
       return res.status(400).json({
         success: false,
-        message: "Image ID is required"
+        message: "Image ID is required",
       });
     }
 
     const foodImage = await FoodImage.findOne({
       _id: id,
-      userId: req.user.userId
+      userId: req.user.userId,
     }).lean();
 
     if (!foodImage) {
       return res.status(404).json({
         success: false,
-        message: "Food image not found"
+        message: "Food image not found",
       });
     }
 
@@ -286,26 +288,27 @@ export const getFoodImageById = async (req: AuthRequest, res: Response) => {
         extractedData: foodImage.extractedData,
         metadata: foodImage.metadata,
         createdAt: foodImage.createdAt,
-        updatedAt: foodImage.updatedAt
-      }
+        updatedAt: foodImage.updatedAt,
+      },
     });
-
   } catch (error) {
     logger.error(`Get food image by ID error: ${(error as Error).message}`);
     res.status(500).json({
       success: false,
-      message: "Internal server error while retrieving food image"
+      message: "Internal server error while retrieving food image",
     });
   }
 };
 
-// Associate food image with inventory item
-export const associateWithInventory = async (req: AuthRequest, res: Response) => {
+export const associateWithInventory = async (
+  req: AuthRequest,
+  res: Response
+) => {
   try {
     if (!req.user) {
       return res.status(401).json({
         success: false,
-        message: "Authentication required"
+        message: "Authentication required",
       });
     }
 
@@ -315,36 +318,37 @@ export const associateWithInventory = async (req: AuthRequest, res: Response) =>
     if (!id) {
       return res.status(400).json({
         success: false,
-        message: "Image ID is required"
+        message: "Image ID is required",
       });
     }
 
     if (!inventoryId) {
       return res.status(400).json({
         success: false,
-        message: "Inventory ID is required"
+        message: "Inventory ID is required",
       });
     }
 
     const foodImage = await FoodImage.findOne({
       _id: id,
-      userId: req.user.userId
+      userId: req.user.userId,
     });
 
     if (!foodImage) {
       return res.status(404).json({
         success: false,
-        message: "Food image not found"
+        message: "Food image not found",
       });
     }
 
-    // Manually update association
     foodImage.associationType = "inventory";
     foodImage.associatedId = new mongoose.Types.ObjectId(inventoryId);
     foodImage.metadata.lastModified = new Date();
     await foodImage.save();
 
-    logger.info(`Food image ${id} associated with inventory item ${inventoryId} by user: ${req.user.username}`);
+    logger.info(
+      `Food image ${id} associated with inventory item ${inventoryId} by user: ${req.user.username}`
+    );
 
     res.status(200).json({
       success: true,
@@ -353,26 +357,27 @@ export const associateWithInventory = async (req: AuthRequest, res: Response) =>
         id: foodImage._id,
         associationType: foodImage.associationType,
         associatedId: foodImage.associatedId,
-        updatedAt: foodImage.updatedAt
-      }
+        updatedAt: foodImage.updatedAt,
+      },
     });
-
   } catch (error) {
     logger.error(`Associate with inventory error: ${(error as Error).message}`);
     res.status(500).json({
       success: false,
-      message: "Internal server error while associating image with inventory"
+      message: "Internal server error while associating image with inventory",
     });
   }
 };
 
-// Associate food image with daily log
-export const associateWithDailyLog = async (req: AuthRequest, res: Response) => {
+export const associateWithDailyLog = async (
+  req: AuthRequest,
+  res: Response
+) => {
   try {
     if (!req.user) {
       return res.status(401).json({
         success: false,
-        message: "Authentication required"
+        message: "Authentication required",
       });
     }
 
@@ -382,36 +387,37 @@ export const associateWithDailyLog = async (req: AuthRequest, res: Response) => 
     if (!id) {
       return res.status(400).json({
         success: false,
-        message: "Image ID is required"
+        message: "Image ID is required",
       });
     }
 
     if (!dailyLogId) {
       return res.status(400).json({
         success: false,
-        message: "Daily log ID is required"
+        message: "Daily log ID is required",
       });
     }
 
     const foodImage = await FoodImage.findOne({
       _id: id,
-      userId: req.user.userId
+      userId: req.user.userId,
     });
 
     if (!foodImage) {
       return res.status(404).json({
         success: false,
-        message: "Food image not found"
+        message: "Food image not found",
       });
     }
 
-    // Manually update association
     foodImage.associationType = "daily_log";
     foodImage.associatedId = new mongoose.Types.ObjectId(dailyLogId);
     foodImage.metadata.lastModified = new Date();
     await foodImage.save();
 
-    logger.info(`Food image ${id} associated with daily log ${dailyLogId} by user: ${req.user.username}`);
+    logger.info(
+      `Food image ${id} associated with daily log ${dailyLogId} by user: ${req.user.username}`
+    );
 
     res.status(200).json({
       success: true,
@@ -420,26 +426,24 @@ export const associateWithDailyLog = async (req: AuthRequest, res: Response) => 
         id: foodImage._id,
         associationType: foodImage.associationType,
         associatedId: foodImage.associatedId,
-        updatedAt: foodImage.updatedAt
-      }
+        updatedAt: foodImage.updatedAt,
+      },
     });
-
   } catch (error) {
     logger.error(`Associate with daily log error: ${(error as Error).message}`);
     res.status(500).json({
       success: false,
-      message: "Internal server error while associating image with daily log"
+      message: "Internal server error while associating image with daily log",
     });
   }
 };
 
-// Remove association from food image
 export const removeAssociation = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({
         success: false,
-        message: "Authentication required"
+        message: "Authentication required",
       });
     }
 
@@ -448,29 +452,30 @@ export const removeAssociation = async (req: AuthRequest, res: Response) => {
     if (!id) {
       return res.status(400).json({
         success: false,
-        message: "Image ID is required"
+        message: "Image ID is required",
       });
     }
 
     const foodImage = await FoodImage.findOne({
       _id: id,
-      userId: req.user.userId
+      userId: req.user.userId,
     });
 
     if (!foodImage) {
       return res.status(404).json({
         success: false,
-        message: "Food image not found"
+        message: "Food image not found",
       });
     }
 
-    // Manually remove association
     foodImage.associationType = "none";
     foodImage.associatedId = undefined;
     foodImage.metadata.lastModified = new Date();
     await foodImage.save();
 
-    logger.info(`Association removed from food image ${id} by user: ${req.user.username}`);
+    logger.info(
+      `Association removed from food image ${id} by user: ${req.user.username}`
+    );
 
     res.status(200).json({
       success: true,
@@ -478,26 +483,24 @@ export const removeAssociation = async (req: AuthRequest, res: Response) => {
       data: {
         id: foodImage._id,
         associationType: foodImage.associationType,
-        updatedAt: foodImage.updatedAt
-      }
+        updatedAt: foodImage.updatedAt,
+      },
     });
-
   } catch (error) {
     logger.error(`Remove association error: ${(error as Error).message}`);
     res.status(500).json({
       success: false,
-      message: "Internal server error while removing association"
+      message: "Internal server error while removing association",
     });
   }
 };
 
-// Delete food image
 export const deleteFoodImage = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({
         success: false,
-        message: "Authentication required"
+        message: "Authentication required",
       });
     }
 
@@ -506,46 +509,50 @@ export const deleteFoodImage = async (req: AuthRequest, res: Response) => {
     if (!id) {
       return res.status(400).json({
         success: false,
-        message: "Image ID is required"
+        message: "Image ID is required",
       });
     }
 
     const foodImage = await FoodImage.findOne({
       _id: id,
-      userId: req.user.userId
+      userId: req.user.userId,
     });
 
     if (!foodImage) {
       return res.status(404).json({
         success: false,
-        message: "Food image not found"
+        message: "Food image not found",
       });
     }
 
-    // Delete from Cloudinary
     try {
       await cloudinary.uploader.destroy(foodImage.cloudinaryPublicId);
-      logger.info(`Food image deleted from Cloudinary: ${foodImage.cloudinaryPublicId}`);
+      logger.info(
+        `Food image deleted from Cloudinary: ${foodImage.cloudinaryPublicId}`
+      );
     } catch (cloudinaryError) {
-      logger.warn(`Failed to delete food image from Cloudinary: ${(cloudinaryError as Error).message}`);
-      // Continue with database deletion even if Cloudinary deletion fails
+      logger.warn(
+        `Failed to delete food image from Cloudinary: ${
+          (cloudinaryError as Error).message
+        }`
+      );
     }
 
-    // Delete from database
     await FoodImage.deleteOne({ _id: id });
 
-    logger.info(`Food image deleted: ${foodImage.title} by user: ${req.user.username}`);
+    logger.info(
+      `Food image deleted: ${foodImage.title} by user: ${req.user.username}`
+    );
 
     res.status(200).json({
       success: true,
-      message: "Food image deleted successfully"
+      message: "Food image deleted successfully",
     });
-
   } catch (error) {
     logger.error(`Delete food image error: ${(error as Error).message}`);
     res.status(500).json({
       success: false,
-      message: "Internal server error while deleting food image"
+      message: "Internal server error while deleting food image",
     });
   }
 };
