@@ -5,6 +5,11 @@ import streamifier from 'streamifier';
 import User from "../schemas/users.schema.js";
 import { AuthRequest } from "../types/auth.types.js";
 
+interface CloudinaryUploadResult {
+  secure_url: string;
+  public_id: string;
+}
+
 // Upload profile picture
 export const uploadProfilePicture = async (req: AuthRequest, res: Response) => {
   try {
@@ -60,7 +65,7 @@ export const uploadProfilePicture = async (req: AuthRequest, res: Response) => {
     }
 
     // Upload new image to Cloudinary
-    const cloudinaryResult = await new Promise((resolve, reject) => {
+    const cloudinaryResult = await new Promise<CloudinaryUploadResult>((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         {
           folder: 'nutrimate_profile_pics',
@@ -70,9 +75,10 @@ export const uploadProfilePicture = async (req: AuthRequest, res: Response) => {
             { fetch_format: 'auto' } // Serve optimal format
           ]
         },
-        (error, result) => {
-          if (error) return reject(error);
-          resolve(result);
+        (err, result) => {
+          if (err) return reject(err);
+          if (!result) return reject(new Error('No result from Cloudinary'));
+          resolve(result as CloudinaryUploadResult);
         }
       );
       streamifier.createReadStream(imageBuffer).pipe(stream);
@@ -82,7 +88,7 @@ export const uploadProfilePicture = async (req: AuthRequest, res: Response) => {
     const updatedUser = await User.findByIdAndUpdate(
       req.user.userId,
       {
-        profilePic: (cloudinaryResult as any).secure_url
+        profilePic: cloudinaryResult.secure_url
       },
       { new: true }
     ).select('-password');
@@ -101,17 +107,20 @@ export const uploadProfilePicture = async (req: AuthRequest, res: Response) => {
       message: "Profile picture uploaded successfully",
       data: {
         profilePic: updatedUser.profilePic,
-        imageId: (cloudinaryResult as any).public_id,
-        imageUrl: (cloudinaryResult as any).secure_url,
+        imageId: cloudinaryResult.public_id,
+        imageUrl: cloudinaryResult.secure_url,
         updatedAt: updatedUser.updatedAt
       }
     });
 
   } catch (error) {
-    logger.error(`Profile picture upload error: ${(error as Error).message}`);
+    const errorMessage = (error as Error).message;
+    logger.error(`Profile picture upload error: ${errorMessage}`);
+    logger.error(`Error stack: ${(error as Error).stack}`);
     res.status(500).json({
       success: false,
-      message: "Internal server error while uploading profile picture"
+      message: "Internal server error while uploading profile picture",
+      error: process.env.NODE_ENV === 'development' ? errorMessage : undefined
     });
   }
 };
@@ -166,6 +175,13 @@ export const deleteProfilePicture = async (req: AuthRequest, res: Response) => {
       },
       { new: true }
     ).select('-password');
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
 
     logger.info(`Profile picture removed for user: ${req.user.username}`);
 
