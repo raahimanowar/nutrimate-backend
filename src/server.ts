@@ -14,6 +14,7 @@ import communityRoutes from "./routes/community.routes.js";
 import resourceRoutes from "./routes/resource.route.js";
 import trackingRoutes from "./routes/tracking.routes.js";
 import foodInventoryRoutes from "./routes/foodInventory.routes";
+import foodImageRoutes from "./routes/food-image.routes.js";
 
 dotenv.config();
 
@@ -67,6 +68,7 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/tracking", trackingRoutes);
 app.use("/api/communities", communityRoutes);
 app.use("/api/food-inventory", foodInventoryRoutes);
+app.use("/api/food-images", foodImageRoutes);
 
 app.get("/api", (_req: Request, res: Response) => {
   res.json({
