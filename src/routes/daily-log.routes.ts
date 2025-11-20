@@ -283,8 +283,8 @@ const handleValidationErrors = (req: any, res: any, next: any) => {
     return res.status(400).json({
       success: false,
       message: "Validation failed",
-      errors: errors.array().map(error => ({
-        field: error.param,
+      errors: errors.array().map((error: any) => ({
+        field: error.param || error.path || 'unknown',
         message: error.msg
       }))
     });

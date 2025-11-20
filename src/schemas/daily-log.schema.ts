@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from "mongoose";
 
 // Daily log item interface
 interface DailyLogItem {
+  _id?: mongoose.Types.ObjectId;
   itemName: string;
   quantity: number;
   unit: string; // e.g., "pieces", "grams", "cups", "servings"
@@ -15,6 +16,7 @@ interface DailyLogItem {
   sodium?: number; // mg
   mealType: "breakfast" | "lunch" | "dinner" | "snack" | "beverage";
   notes?: string;
+  [key: string]: unknown; // Allow dynamic property access
 }
 
 // Daily log document interface
@@ -32,6 +34,7 @@ export interface DailyLogDocument extends Document {
   waterIntake: number; // glasses of water
   createdAt: Date;
   updatedAt: Date;
+  calculateTotals(): void;
 }
 
 // Daily log item schema
@@ -171,7 +174,7 @@ const DailyLogSchema: Schema = new Schema({
 });
 
 // Pre-save middleware to calculate totals
-DailyLogSchema.pre("save", function(next) {
+DailyLogSchema.pre("save", function(this: DailyLogDocument, next) {
   if (this.isModified("items")) {
     this.calculateTotals();
   }

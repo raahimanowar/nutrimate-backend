@@ -25,6 +25,7 @@ export const getDailyLog = async (req: AuthRequest, res: Response) => {
     }
 
     // Find or create daily log
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dailyLog = await (DailyLog as any).findOrCreate(req.user.userId, targetDate);
 
     res.status(200).json({
@@ -70,7 +71,7 @@ export const getDailyLogs = async (req: AuthRequest, res: Response) => {
     const query = req.query as DailyLogQueryParams;
 
     // Build date filter
-    let dateFilter: any = {};
+    let dateFilter: Record<string, Date> = {};
     if (query.date) {
       const targetDate = new Date(query.date);
       const startOfDay = new Date(targetDate);
@@ -86,7 +87,7 @@ export const getDailyLogs = async (req: AuthRequest, res: Response) => {
     }
 
     // Build base query
-    const mongoQuery: any = { userId: req.user.userId };
+    const mongoQuery: Record<string, unknown> = { userId: req.user.userId };
     if (Object.keys(dateFilter).length > 0) {
       mongoQuery.date = dateFilter;
     }
@@ -94,7 +95,7 @@ export const getDailyLogs = async (req: AuthRequest, res: Response) => {
     // Sort options
     const sortField = query.sortBy || 'date';
     const sortOrder = query.sortOrder === 'asc' ? 1 : -1;
-    const sortOptions: any = { [sortField]: sortOrder };
+    const sortOptions: Record<string, 1 | -1> = { [sortField]: sortOrder };
 
     // Pagination
     const page = parseInt(query.page || '1');
@@ -177,7 +178,7 @@ export const addDailyLogItem = async (req: AuthRequest, res: Response) => {
     }
 
     // Validate item data
-    const { itemName, quantity, unit, category, mealType } = item;
+    const { itemName, quantity, category, mealType } = item;
     if (!itemName || !quantity || !category || !mealType) {
       return res.status(400).json({
         success: false,
@@ -193,6 +194,7 @@ export const addDailyLogItem = async (req: AuthRequest, res: Response) => {
     }
 
     // Find or create daily log
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dailyLog = await (DailyLog as any).findOrCreate(req.user.userId, targetDate);
 
     // Add item to log
@@ -270,7 +272,7 @@ export const updateDailyLogItem = async (req: AuthRequest, res: Response) => {
 
     // Find and update item
     const itemIndex = dailyLog.items.findIndex(item =>
-      item._id.toString() === itemId
+      item._id?.toString() === itemId
     );
 
     if (itemIndex === -1) {
@@ -358,7 +360,7 @@ export const deleteDailyLogItem = async (req: AuthRequest, res: Response) => {
 
     // Remove item
     const itemIndex = dailyLog.items.findIndex(item =>
-      item._id.toString() === itemId
+      item._id?.toString() === itemId
     );
 
     if (itemIndex === -1) {
@@ -435,6 +437,7 @@ export const updateWaterIntake = async (req: AuthRequest, res: Response) => {
     }
 
     // Find or create daily log
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dailyLog = await (DailyLog as any).findOrCreate(req.user.userId, targetDate);
 
     // Update water intake
@@ -574,7 +577,7 @@ export const getAllTimeConsumptionHistory = async (req: AuthRequest, res: Respon
     const skip = (pageNum - 1) * limitNum;
 
     // Build sort options
-    const sortOptions: any = {};
+    const sortOptions: Record<string, 1 | -1> = {};
     if (sortBy === 'date') {
       sortOptions.date = sortOrder === 'asc' ? 1 : -1;
     } else if (sortBy === 'totalCalories') {
