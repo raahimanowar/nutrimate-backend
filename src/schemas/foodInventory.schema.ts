@@ -2,11 +2,16 @@ import mongoose from "mongoose";
 
 const FoodInventorySchema = new mongoose.Schema(
   {
-    name: { type: String, required: true },
-    category: { type: String, required: true }, // e.g., Dairy, Fruit, Grain
-    expirationDays: { type: Number, required: true },
-    costPerUnit: { type: Number, required: true },
-    quantity: { type: Number, default: 0 },
+    name: { type: String, required: true, trim: true },
+    category: {
+      type: String,
+      required: true,
+      lowercase: true,
+      trim: true,
+    },
+    expirationDates: { type: Number, required: true, min: 0 },
+    costPerUnit: { type: Number, required: true, min: 0 },
+    quantity: { type: Number, default: 0, min: 0 },
   },
   {
     timestamps: true,
@@ -14,4 +19,8 @@ const FoodInventorySchema = new mongoose.Schema(
   }
 );
 
-export default mongoose.model("FoodInventory", FoodInventorySchema);
+export default mongoose.model(
+  "FoodInventory",
+  FoodInventorySchema,
+  "food_inventory"
+);
