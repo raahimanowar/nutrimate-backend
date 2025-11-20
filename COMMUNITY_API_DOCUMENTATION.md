@@ -137,6 +137,9 @@
       "profilePic": "https://example.com/profile.jpg"
     },
     "content": "Just finished a great workout session! Who else is active today?",
+    "upvotesCount": 0,
+    "downvotesCount": 0,
+    "userVote": null,
     "createdAt": "2024-01-15T14:30:00.000Z"
   }
 }
@@ -166,6 +169,9 @@
         "profilePic": "https://example.com/profile.jpg"
       },
       "content": "Just finished a great workout session! Who else is active today?",
+      "upvotesCount": 5,
+      "downvotesCount": 1,
+      "userVote": null,
       "createdAt": "2024-01-15T14:30:00.000Z"
     }
   ],
@@ -174,6 +180,130 @@
     "limit": 10,
     "total": 25,
     "totalPages": 3
+  }
+}
+```
+
+---
+
+## Vote on Post
+**POST** `/api/communities/:communityId/posts/:postId/vote`
+
+**Request:**
+```json
+{
+  "voteType": "upvote"
+}
+```
+
+**Success (200):**
+```json
+{
+  "success": true,
+  "message": "Post upvoted successfully",
+  "data": {
+    "upvotesCount": 6,
+    "downvotesCount": 1,
+    "userVote": "upvote"
+  }
+}
+```
+
+---
+
+## Create Comment
+**POST** `/api/communities/:communityId/posts/:postId/comments`
+
+**Request:**
+```json
+{
+  "content": "Great workout! What exercises did you do?"
+}
+```
+
+**Success (201):**
+```json
+{
+  "success": true,
+  "message": "Comment created successfully",
+  "data": {
+    "_id": "64f8a1b2c3d4e5f6a7b8c9d6",
+    "post": "64f8a1b2c3d4e5f6a7b8c9d5",
+    "author": {
+      "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
+      "username": "john_doe",
+      "email": "john@example.com",
+      "profilePic": "https://example.com/profile.jpg"
+    },
+    "content": "Great workout! What exercises did you do?",
+    "upvotesCount": 0,
+    "downvotesCount": 0,
+    "userVote": null,
+    "createdAt": "2024-01-15T15:00:00.000Z"
+  }
+}
+```
+
+---
+
+## Get Comments
+**GET** `/api/communities/:communityId/posts/:postId/comments`
+
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Comments per page (default: 20)
+
+**Success (200):**
+```json
+{
+  "success": true,
+  "message": "Comments retrieved successfully",
+  "data": [
+    {
+      "_id": "64f8a1b2c3d4e5f6a7b8c9d6",
+      "author": {
+        "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
+        "username": "john_doe",
+        "email": "john@example.com",
+        "profilePic": "https://example.com/profile.jpg"
+      },
+      "content": "Great workout! What exercises did you do?",
+      "upvotesCount": 3,
+      "downvotesCount": 0,
+      "userVote": "upvote",
+      "createdAt": "2024-01-15T15:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 8,
+    "totalPages": 1
+  }
+}
+```
+
+---
+
+## Vote on Comment
+**POST** `/api/communities/:communityId/posts/:postId/comments/:commentId/vote`
+
+**Request:**
+```json
+{
+  "voteType": "upvote"
+}
+```
+
+**Success (200):**
+```json
+{
+  "success": true,
+  "message": "Comment upvoted successfully",
+  "data": {
+    "upvotesCount": 4,
+    "downvotesCount": 0,
+    "userVote": "upvote"
   }
 }
 ```
@@ -195,9 +325,22 @@
 **Post Schema:**
 ```typescript
 {
-  community: ObjectId;  // Community reference
-  author: ObjectId;     // User who created post
-  content: string;      // Required, max 1000 chars
+  community: ObjectId;   // Community reference
+  author: ObjectId;      // User who created post
+  content: string;       // Required, max 1000 chars
+  upvotes: ObjectId[];   // Users who upvoted
+  downvotes: ObjectId[]; // Users who downvoted
+}
+```
+
+**Comment Schema:**
+```typescript
+{
+  post: ObjectId;        // Post reference
+  author: ObjectId;      // User who created comment
+  content: string;       // Required, max 500 chars
+  upvotes: ObjectId[];   // Users who upvoted
+  downvotes: ObjectId[]; // Users who downvoted
 }
 ```
 
@@ -259,11 +402,63 @@ fetch('/api/communities/64f8a1b2c3d4e5f6a7b8c9d0/posts?page=1&limit=10', {
 });
 ```
 
+**Vote on Post:**
+```javascript
+fetch('/api/communities/64f8a1b2c3d4e5f6a7b8c9d0/posts/64f8a1b2c3d4e5f6a7b8c9d5/vote', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer ' + token,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    voteType: 'upvote'
+  })
+});
+```
+
+**Create Comment:**
+```javascript
+fetch('/api/communities/64f8a1b2c3d4e5f6a7b8c9d0/posts/64f8a1b2c3d4e5f6a7b8c9d5/comments', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer ' + token,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    content: 'Great workout! What exercises did you do?'
+  })
+});
+```
+
+**Get Comments:**
+```javascript
+fetch('/api/communities/64f8a1b2c3d4e5f6a7b8c9d0/posts/64f8a1b2c3d4e5f6a7b8c9d5/comments', {
+  method: 'GET',
+  headers: { 'Authorization': 'Bearer ' + token }
+});
+```
+
+**Vote on Comment:**
+```javascript
+fetch('/api/communities/64f8a1b2c3d4e5f6a7b8c9d0/posts/64f8a1b2c3d4e5f6a7b8c9d5/comments/64f8a1b2c3d4e5f6a7b8c9d6/vote', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer ' + token,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    voteType: 'upvote'
+  })
+});
+```
+
 ---
 
 **Rules:**
 - Admin cannot leave their own community
 - Admin automatically becomes a member when creating community
-- Only community members can post and view posts
+- Only community members can post, comment, and vote
+- Users can change their vote (upvote/downvote) - previous vote is replaced
 - All endpoints require authentication
-- Posts are sorted by newest first
+- Posts sorted by newest, comments by oldest
+- Posts: max 1000 chars, Comments: max 500 chars

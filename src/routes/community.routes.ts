@@ -7,7 +7,11 @@ import {
   getUserCommunities,
   leaveCommunity,
   createCommunityPost,
-  getCommunityPosts
+  getCommunityPosts,
+  votePost,
+  createComment,
+  getComments,
+  voteComment
 } from "../controllers/community.controller.js";
 import { body, param, validationResult } from "express-validator";
 
@@ -59,6 +63,57 @@ const validateCreatePost = [
     .withMessage('Post content must be between 1 and 1000 characters')
 ];
 
+const validateVote = [
+  param('communityId')
+    .isMongoId()
+    .withMessage('Invalid community ID'),
+
+  body('voteType')
+    .isIn(['upvote', 'downvote'])
+    .withMessage('Vote type must be upvote or downvote')
+];
+
+const validatePostId = [
+  param('communityId')
+    .isMongoId()
+    .withMessage('Invalid community ID'),
+
+  param('postId')
+    .isMongoId()
+    .withMessage('Invalid post ID')
+];
+
+const validateCommentId = [
+  param('communityId')
+    .isMongoId()
+    .withMessage('Invalid community ID'),
+
+  param('postId')
+    .isMongoId()
+    .withMessage('Invalid post ID'),
+
+  param('commentId')
+    .isMongoId()
+    .withMessage('Invalid comment ID')
+];
+
+const validateCreateComment = [
+  param('communityId')
+    .isMongoId()
+    .withMessage('Invalid community ID'),
+
+  param('postId')
+    .isMongoId()
+    .withMessage('Invalid post ID'),
+
+  body('content')
+    .trim()
+    .notEmpty()
+    .withMessage('Comment content is required')
+    .isLength({ min: 1, max: 500 })
+    .withMessage('Comment content must be between 1 and 500 characters')
+];
+
 // Validation middleware
 const handleValidationErrors = (req: any, res: any, next: any) => {
   const errors = validationResult(req);
@@ -97,5 +152,17 @@ router.post("/:communityId/posts", validateCreatePost, handleValidationErrors, c
 
 // Get posts from community
 router.get("/:communityId/posts", validateCommunityId, handleValidationErrors, getCommunityPosts);
+
+// Vote on a post
+router.post("/:communityId/posts/:postId/vote", validateVote, handleValidationErrors, votePost);
+
+// Create comment on post
+router.post("/:communityId/posts/:postId/comments", validateCreateComment, handleValidationErrors, createComment);
+
+// Get comments for post
+router.get("/:communityId/posts/:postId/comments", validatePostId, handleValidationErrors, getComments);
+
+// Vote on a comment
+router.post("/:communityId/posts/:postId/comments/:commentId/vote", validateVote, handleValidationErrors, voteComment);
 
 export default router;

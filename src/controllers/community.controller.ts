@@ -2,6 +2,7 @@ import { Response } from "express";
 import { logger } from "../utils/logger.js";
 import Community from "../schemas/community.schema.js";
 import CommunityPost from "../schemas/community-post.schema.js";
+import Comment from "../schemas/comment.schema.js";
 import User from "../schemas/user.schema.js";
 import { AuthRequest } from "../types/auth.types.js";
 
@@ -332,6 +333,9 @@ export const createCommunityPost = async (req: AuthRequest, res: Response) => {
         community: post.community,
         author: post.author,
         content: post.content,
+        upvotesCount: post.upvotes.length,
+        downvotesCount: post.downvotes.length,
+        userVote: null,
         createdAt: post.createdAt
       }
     });
@@ -397,12 +401,24 @@ export const getCommunityPosts = async (req: AuthRequest, res: Response) => {
     res.status(200).json({
       success: true,
       message: "Posts retrieved successfully",
-      data: posts.map(post => ({
-        _id: post._id,
-        author: post.author,
-        content: post.content,
-        createdAt: post.createdAt
-      })),
+      data: posts.map(post => {
+        let userVote = null;
+        if (post.upvotes.includes(req.user.userId as any)) {
+          userVote = 'upvote';
+        } else if (post.downvotes.includes(req.user.userId as any)) {
+          userVote = 'downvote';
+        }
+
+        return {
+          _id: post._id,
+          author: post.author,
+          content: post.content,
+          upvotesCount: post.upvotes.length,
+          downvotesCount: post.downvotes.length,
+          userVote,
+          createdAt: post.createdAt
+        };
+      }),
       pagination: {
         page,
         limit,
@@ -416,6 +432,355 @@ export const getCommunityPosts = async (req: AuthRequest, res: Response) => {
     res.status(500).json({
       success: false,
       message: "Internal server error while fetching posts"
+    });
+  }
+};
+
+// Vote on a post (upvote or downvote)
+export const votePost = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required"
+      });
+    }
+
+    const { communityId, postId } = req.params;
+    const { voteType } = req.body; // 'upvote' or 'downvote'
+
+    if (!communityId || !postId) {
+      return res.status(400).json({
+        success: false,
+        message: "Community ID and Post ID are required"
+      });
+    }
+
+    if (!['upvote', 'downvote'].includes(voteType)) {
+      return res.status(400).json({
+        success: false,
+        message: "Vote type must be 'upvote' or 'downvote'"
+      });
+    }
+
+    // Check if community exists and user is a member
+    const community = await Community.findById(communityId);
+    if (!community) {
+      return res.status(404).json({
+        success: false,
+        message: "Community not found"
+      });
+    }
+
+    if (!community.members.includes(req.user.userId as any)) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be a member of this community to vote"
+      });
+    }
+
+    // Find post
+    const post = await CommunityPost.findById(postId);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Post not found"
+      });
+    }
+
+    // Remove user from both vote arrays first
+    post.upvotes = post.upvotes.filter(id => id.toString() !== req.user.userId?.toString());
+    post.downvotes = post.downvotes.filter(id => id.toString() !== req.user.userId?.toString());
+
+    // Add user to the appropriate vote array
+    if (voteType === 'upvote') {
+      post.upvotes.push(req.user.userId as any);
+    } else {
+      post.downvotes.push(req.user.userId as any);
+    }
+
+    await post.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Post ${voteType}d successfully`,
+      data: {
+        upvotesCount: post.upvotes.length,
+        downvotesCount: post.downvotes.length,
+        userVote: voteType
+      }
+    });
+
+  } catch (error) {
+    logger.error(`Vote post error: ${(error as Error).message}`);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error while voting on post"
+    });
+  }
+};
+
+// Create a comment on a post
+export const createComment = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required"
+      });
+    }
+
+    const { communityId, postId } = req.params;
+    const { content } = req.body;
+
+    if (!communityId || !postId) {
+      return res.status(400).json({
+        success: false,
+        message: "Community ID and Post ID are required"
+      });
+    }
+
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Comment content is required"
+      });
+    }
+
+    // Check if community exists and user is a member
+    const community = await Community.findById(communityId);
+    if (!community) {
+      return res.status(404).json({
+        success: false,
+        message: "Community not found"
+      });
+    }
+
+    if (!community.members.includes(req.user.userId as any)) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be a member of this community to comment"
+      });
+    }
+
+    // Check if post exists
+    const post = await CommunityPost.findById(postId);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Post not found"
+      });
+    }
+
+    // Create comment
+    const comment = new Comment({
+      post: postId,
+      author: req.user.userId,
+      content: content.trim()
+    });
+
+    await comment.save();
+    await comment.populate('author', 'username email profilePic');
+
+    res.status(201).json({
+      success: true,
+      message: "Comment created successfully",
+      data: {
+        _id: comment._id,
+        post: comment.post,
+        author: comment.author,
+        content: comment.content,
+        upvotesCount: comment.upvotes.length,
+        downvotesCount: comment.downvotes.length,
+        userVote: null,
+        createdAt: comment.createdAt
+      }
+    });
+
+  } catch (error) {
+    logger.error(`Create comment error: ${(error as Error).message}`);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error while creating comment"
+    });
+  }
+};
+
+// Get comments for a post
+export const getComments = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required"
+      });
+    }
+
+    const { communityId, postId } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const skip = (page - 1) * limit;
+
+    if (!communityId || !postId) {
+      return res.status(400).json({
+        success: false,
+        message: "Community ID and Post ID are required"
+      });
+    }
+
+    // Check if community exists and user is a member
+    const community = await Community.findById(communityId);
+    if (!community) {
+      return res.status(404).json({
+        success: false,
+        message: "Community not found"
+      });
+    }
+
+    if (!community.members.includes(req.user.userId as any)) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be a member of this community to view comments"
+      });
+    }
+
+    // Check if post exists
+    const post = await CommunityPost.findById(postId);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: "Post not found"
+      });
+    }
+
+    // Get comments
+    const [comments, total] = await Promise.all([
+      Comment.find({ post: postId })
+        .populate('author', 'username email profilePic')
+        .sort({ createdAt: 1 })
+        .skip(skip)
+        .limit(limit),
+      Comment.countDocuments({ post: postId })
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: "Comments retrieved successfully",
+      data: comments.map(comment => {
+        let userVote = null;
+        if (comment.upvotes.includes(req.user.userId as any)) {
+          userVote = 'upvote';
+        } else if (comment.downvotes.includes(req.user.userId as any)) {
+          userVote = 'downvote';
+        }
+
+        return {
+          _id: comment._id,
+          author: comment.author,
+          content: comment.content,
+          upvotesCount: comment.upvotes.length,
+          downvotesCount: comment.downvotes.length,
+          userVote,
+          createdAt: comment.createdAt
+        };
+      }),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+
+  } catch (error) {
+    logger.error(`Get comments error: ${(error as Error).message}`);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error while fetching comments"
+    });
+  }
+};
+
+// Vote on a comment
+export const voteComment = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required"
+      });
+    }
+
+    const { communityId, postId, commentId } = req.params;
+    const { voteType } = req.body; // 'upvote' or 'downvote'
+
+    if (!communityId || !postId || !commentId) {
+      return res.status(400).json({
+        success: false,
+        message: "Community ID, Post ID, and Comment ID are required"
+      });
+    }
+
+    if (!['upvote', 'downvote'].includes(voteType)) {
+      return res.status(400).json({
+        success: false,
+        message: "Vote type must be 'upvote' or 'downvote'"
+      });
+    }
+
+    // Check if community exists and user is a member
+    const community = await Community.findById(communityId);
+    if (!community) {
+      return res.status(404).json({
+        success: false,
+        message: "Community not found"
+      });
+    }
+
+    if (!community.members.includes(req.user.userId as any)) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be a member of this community to vote"
+      });
+    }
+
+    // Find comment
+    const comment = await Comment.findById(commentId);
+    if (!comment) {
+      return res.status(404).json({
+        success: false,
+        message: "Comment not found"
+      });
+    }
+
+    // Remove user from both vote arrays first
+    comment.upvotes = comment.upvotes.filter(id => id.toString() !== req.user.userId?.toString());
+    comment.downvotes = comment.downvotes.filter(id => id.toString() !== req.user.userId?.toString());
+
+    // Add user to the appropriate vote array
+    if (voteType === 'upvote') {
+      comment.upvotes.push(req.user.userId as any);
+    } else {
+      comment.downvotes.push(req.user.userId as any);
+    }
+
+    await comment.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Comment ${voteType}d successfully`,
+      data: {
+        upvotesCount: comment.upvotes.length,
+        downvotesCount: comment.downvotes.length,
+        userVote: voteType
+      }
+    });
+
+  } catch (error) {
+    logger.error(`Vote comment error: ${(error as Error).message}`);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error while voting on comment"
     });
   }
 };
