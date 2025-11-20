@@ -61,6 +61,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
     }
 
     const {
+      fullname,
       height,
       weight,
       address,
@@ -72,6 +73,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
     } = req.body;
 
     const updateData: Partial<{
+      fullname: string;
       height: number;
       weight: number;
       address: { country?: string; city?: string };
@@ -82,6 +84,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
       householdSize: number;
     }> = {};
 
+    if (fullname !== undefined) updateData.fullname = fullname;
     if (height !== undefined) updateData.height = height;
     if (weight !== undefined) updateData.weight = weight;
     if (address !== undefined) updateData.address = address;
