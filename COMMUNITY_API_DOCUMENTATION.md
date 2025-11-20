@@ -112,6 +112,74 @@
 
 ---
 
+## Create Post in Community
+**POST** `/api/communities/:communityId/posts`
+
+**Request:**
+```json
+{
+  "content": "Just finished a great workout session! Who else is active today?"
+}
+```
+
+**Success (201):**
+```json
+{
+  "success": true,
+  "message": "Post created successfully",
+  "data": {
+    "_id": "64f8a1b2c3d4e5f6a7b8c9d5",
+    "community": "64f8a1b2c3d4e5f6a7b8c9d0",
+    "author": {
+      "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
+      "username": "john_doe",
+      "email": "john@example.com",
+      "profilePic": "https://example.com/profile.jpg"
+    },
+    "content": "Just finished a great workout session! Who else is active today?",
+    "createdAt": "2024-01-15T14:30:00.000Z"
+  }
+}
+```
+
+---
+
+## Get Community Posts
+**GET** `/api/communities/:communityId/posts`
+
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Posts per page (default: 10)
+
+**Success (200):**
+```json
+{
+  "success": true,
+  "message": "Posts retrieved successfully",
+  "data": [
+    {
+      "_id": "64f8a1b2c3d4e5f6a7b8c9d5",
+      "author": {
+        "_id": "64f8a1b2c3d4e5f6a7b8c9d1",
+        "username": "john_doe",
+        "email": "john@example.com",
+        "profilePic": "https://example.com/profile.jpg"
+      },
+      "content": "Just finished a great workout session! Who else is active today?",
+      "createdAt": "2024-01-15T14:30:00.000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 25,
+    "totalPages": 3
+  }
+}
+```
+
+---
+
 ## Community Schema
 
 ```typescript
@@ -121,6 +189,15 @@
   description: string;  // Required, max 1000 chars
   admin: ObjectId;      // User who created community
   members: ObjectId[];  // Community members
+}
+```
+
+**Post Schema:**
+```typescript
+{
+  community: ObjectId;  // Community reference
+  author: ObjectId;     // User who created post
+  content: string;      // Required, max 1000 chars
 }
 ```
 
@@ -160,9 +237,33 @@ fetch('/api/communities/64f8a1b2c3d4e5f6a7b8c9d0/leave', {
 });
 ```
 
+**Create Post:**
+```javascript
+fetch('/api/communities/64f8a1b2c3d4e5f6a7b8c9d0/posts', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer ' + token,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    content: "Just finished a great workout session! Who else is active today?"
+  })
+});
+```
+
+**Get Posts:**
+```javascript
+fetch('/api/communities/64f8a1b2c3d4e5f6a7b8c9d0/posts?page=1&limit=10', {
+  method: 'GET',
+  headers: { 'Authorization': 'Bearer ' + token }
+});
+```
+
 ---
 
 **Rules:**
 - Admin cannot leave their own community
 - Admin automatically becomes a member when creating community
+- Only community members can post and view posts
 - All endpoints require authentication
+- Posts are sorted by newest first

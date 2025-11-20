@@ -5,7 +5,9 @@ import {
   joinCommunity,
   getAllCommunities,
   getUserCommunities,
-  leaveCommunity
+  leaveCommunity,
+  createCommunityPost,
+  getCommunityPosts
 } from "../controllers/community.controller.js";
 import { body, param, validationResult } from "express-validator";
 
@@ -44,6 +46,19 @@ const validateCommunityId = [
     .withMessage('Invalid community ID')
 ];
 
+const validateCreatePost = [
+  param('communityId')
+    .isMongoId()
+    .withMessage('Invalid community ID'),
+
+  body('content')
+    .trim()
+    .notEmpty()
+    .withMessage('Post content is required')
+    .isLength({ min: 1, max: 1000 })
+    .withMessage('Post content must be between 1 and 1000 characters')
+];
+
 // Validation middleware
 const handleValidationErrors = (req: any, res: any, next: any) => {
   const errors = validationResult(req);
@@ -76,5 +91,11 @@ router.post("/:communityId/join", validateCommunityId, handleValidationErrors, j
 
 // Leave a community
 router.post("/:communityId/leave", validateCommunityId, handleValidationErrors, leaveCommunity);
+
+// Create a post in community
+router.post("/:communityId/posts", validateCreatePost, handleValidationErrors, createCommunityPost);
+
+// Get posts from community
+router.get("/:communityId/posts", validateCommunityId, handleValidationErrors, getCommunityPosts);
 
 export default router;

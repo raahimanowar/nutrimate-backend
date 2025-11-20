@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { logger } from "../utils/logger.js";
 import Community from "../schemas/community.schema.js";
+import CommunityPost from "../schemas/community-post.schema.js";
 import User from "../schemas/user.schema.js";
 import { AuthRequest } from "../types/auth.types.js";
 
@@ -263,6 +264,158 @@ export const leaveCommunity = async (req: AuthRequest, res: Response) => {
     res.status(500).json({
       success: false,
       message: "Internal server error while leaving community"
+    });
+  }
+};
+
+// Create a post in community
+export const createCommunityPost = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required"
+      });
+    }
+
+    const { communityId } = req.params;
+    const { content } = req.body;
+
+    if (!communityId) {
+      return res.status(400).json({
+        success: false,
+        message: "Community ID is required"
+      });
+    }
+
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Post content is required"
+      });
+    }
+
+    // Check if community exists and user is a member
+    const community = await Community.findById(communityId);
+
+    if (!community) {
+      return res.status(404).json({
+        success: false,
+        message: "Community not found"
+      });
+    }
+
+    if (!community.members.includes(req.user.userId as any)) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be a member of this community to post"
+      });
+    }
+
+    // Create post
+    const post = new CommunityPost({
+      community: communityId,
+      author: req.user.userId,
+      content: content.trim()
+    });
+
+    await post.save();
+
+    // Populate author details
+    await post.populate('author', 'username email profilePic');
+
+    res.status(201).json({
+      success: true,
+      message: "Post created successfully",
+      data: {
+        _id: post._id,
+        community: post.community,
+        author: post.author,
+        content: post.content,
+        createdAt: post.createdAt
+      }
+    });
+
+  } catch (error) {
+    logger.error(`Create community post error: ${(error as Error).message}`);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error while creating post"
+    });
+  }
+};
+
+// Get posts from a community
+export const getCommunityPosts = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required"
+      });
+    }
+
+    const { communityId } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+
+    if (!communityId) {
+      return res.status(400).json({
+        success: false,
+        message: "Community ID is required"
+      });
+    }
+
+    // Check if community exists and user is a member
+    const community = await Community.findById(communityId);
+
+    if (!community) {
+      return res.status(404).json({
+        success: false,
+        message: "Community not found"
+      });
+    }
+
+    if (!community.members.includes(req.user.userId as any)) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be a member of this community to view posts"
+      });
+    }
+
+    // Get posts
+    const [posts, total] = await Promise.all([
+      CommunityPost.find({ community: communityId })
+        .populate('author', 'username email profilePic')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      CommunityPost.countDocuments({ community: communityId })
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: "Posts retrieved successfully",
+      data: posts.map(post => ({
+        _id: post._id,
+        author: post.author,
+        content: post.content,
+        createdAt: post.createdAt
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+
+  } catch (error) {
+    logger.error(`Get community posts error: ${(error as Error).message}`);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error while fetching posts"
     });
   }
 };
