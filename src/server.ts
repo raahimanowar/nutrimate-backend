@@ -89,6 +89,7 @@ app.get("/api", (_req, res) => {
   res.json(response);
 });
 
+
 // ---------------- SERVER ----------------
 const port = Number(process.env.PORT) || 5000;
 
