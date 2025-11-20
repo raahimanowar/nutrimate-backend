@@ -8,7 +8,6 @@ export const register = async (req: Request, res: Response) => {
   try {
     const { username, email, password } = req.body;
 
-    // Check if user already exists
     const existingUser = await User.findOne({
       $or: [{ email }, { username }],
     });
@@ -20,11 +19,9 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
-    // Hash password
     const salt = await bcryptjs.genSalt(12);
     const hashedPassword = await bcryptjs.hash(password, salt);
 
-    // Create new user
     const newUser = new User({
       username,
       fullname: username,
@@ -34,7 +31,6 @@ export const register = async (req: Request, res: Response) => {
 
     await newUser.save();
 
-    // Generate JWT token for immediate login
     const token = jwt.sign(
       {
         userId: newUser._id,
@@ -72,9 +68,8 @@ export const register = async (req: Request, res: Response) => {
 
 export const login = async (req: Request, res: Response) => {
   try {
-    const { identifier, password } = req.body; // identifier can be username or email
+    const { identifier, password } = req.body;
 
-    // Find user by username or email
     const user = await User.findOne({
       $or: [{ email: identifier }, { username: identifier }],
     });
@@ -86,7 +81,6 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    // Check password
     const isPasswordValid = await bcryptjs.compare(password, user.password);
 
     if (!isPasswordValid) {
@@ -96,7 +90,6 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    // Generate JWT token
     const token = jwt.sign(
       {
         userId: user._id,
