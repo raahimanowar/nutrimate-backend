@@ -33,6 +33,9 @@ pnpm-lock.yaml
 .pnpm-store
 .pnpmrc
 
+# npm config
+.npmrc
+
 # misc
 .DS_Store
 .vercel
