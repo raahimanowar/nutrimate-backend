@@ -21,7 +21,6 @@ const app = express();
 
 app.set("trust proxy", true);
 
-<<<<<<< HEAD
 // CRITICAL: CORS must be the absolute FIRST middleware - handle OPTIONS immediately
 app.use((req, res, next) => {
   // Set CORS headers on EVERY response
@@ -40,8 +39,6 @@ app.use((req, res, next) => {
 });
 
 // Backup: Also use cors() library
-=======
->>>>>>> d13f001c3e1b01149cfca2e81432957b70d8514e
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -58,8 +55,6 @@ app.use(
         callback(new Error("Not allowed by CORS"));
       }
     },
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
