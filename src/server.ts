@@ -11,6 +11,7 @@ import inventoryRoutes from "./routes/inventory.routes.js";
 import dailyLogRoutes from "./routes/daily-log.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
 import resourceRoutes from "./routes/resource.route.js";
+import trackingRoutes from "./routes/tracking.routes.js";
 
 dotenv.config();
 
@@ -77,6 +78,8 @@ app.use("/api/resources", resourceRoutes);
 // Upload routes (protected)
 app.use("/api/upload", uploadRoutes);
 
+app.use("/api/tracking", trackingRoutes);
+
 // API info route
 app.get("/api", (_req, res) => {
   const response = {
@@ -88,7 +91,6 @@ app.get("/api", (_req, res) => {
   };
   res.json(response);
 });
-
 
 // ---------------- SERVER ----------------
 const port = Number(process.env.PORT) || 5000;
