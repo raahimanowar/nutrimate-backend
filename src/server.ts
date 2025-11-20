@@ -10,6 +10,7 @@ import userRoutes from "./routes/user.routes.js";
 import inventoryRoutes from "./routes/inventory.routes.js";
 import dailyLogRoutes from "./routes/daily-log.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
+import communityRoutes from "./routes/community.routes.js";
 import resourceRoutes from "./routes/resource.route.js";
 
 dotenv.config();
@@ -80,6 +81,9 @@ app.use("/api/resources", resourceRoutes);
 
 // Upload routes (protected)
 app.use("/api/upload", uploadRoutes);
+
+// Community routes (protected)
+app.use("/api/communities", communityRoutes);
 
 // API info route
 app.get("/api", (_req, res) => {
