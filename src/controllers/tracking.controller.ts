@@ -16,6 +16,14 @@ import DailyLog from "../schemas/daily-log.schema.js";
 import Resource from "../schemas/resource.schema.js";
 import { logger } from "../utils/logger.js";
 
+// Helper function to convert Date to local YYYY-MM-DD string
+const toLocalDateString = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 // Helper function to calculate date ranges based on query parameters
 const calculateDateRange = (query: any) => {
   const today = new Date();
@@ -79,8 +87,8 @@ const calculateDateRange = (query: any) => {
     endDate,
     rangeType,
     dayCount,
-    startDateString: startDate.toISOString().split('T')[0],
-    endDateString: endDate.toISOString().split('T')[0]
+    startDateString: toLocalDateString(startDate),
+    endDateString: toLocalDateString(endDate)
   };
 };
 
@@ -345,7 +353,7 @@ export const getCalorieGraphData = async (req: AuthRequest, res: Response): Prom
 
     // Format data for calorie graph consumption
     const graphData = dailyLogs.map((log) => ({
-      date: log.date.toISOString().split('T')[0], // YYYY-MM-DD format
+      date: toLocalDateString(log.date), // Use local date string to avoid UTC conversion
       calories: log.totalCalories || 0,
       protein: log.totalProtein || 0,
       carbs: log.totalCarbs || 0,
@@ -458,7 +466,7 @@ export const getWaterGraphData = async (req: AuthRequest, res: Response): Promis
 
     // Format data for water intake graph consumption
     const graphData = dailyLogs.map((log) => ({
-      date: log.date.toISOString().split('T')[0], // YYYY-MM-DD format
+      date: toLocalDateString(log.date), // Use local date string to avoid UTC conversion
       waterIntake: log.waterIntake || 0,
       itemsCount: log.items.length
     }));

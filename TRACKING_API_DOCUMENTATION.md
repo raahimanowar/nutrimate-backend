@@ -309,3 +309,206 @@ GET /api/tracking/water?startDate=2024-01-01&endDate=2024-01-31
   "message": "Internal server error while fetching tracking summary"
 }
 ```
+
+Here are the complete outputs from the separate graph endpoints:
+
+  🔥 Calorie Graph Output (/api/tracking/calories)
+
+  {
+    "success": true,
+    "message": "Calorie graph data retrieved for weekly view (7 days)",
+    "data": {
+      "graphData": [
+        {
+          "date": "2024-01-14",
+          "calories": 1850,
+          "protein": 75,
+          "carbs": 220,
+          "fats": 65,
+          "itemsCount": 5
+        },
+        {
+          "date": "2024-01-15",
+          "calories": 2100,
+          "protein": 85,
+          "carbs": 250,
+          "fats": 75,
+          "itemsCount": 6
+        }
+        // ... more days
+      ],
+      "movingAverages": [
+        {
+          "date": "2024-01-14",
+          "caloriesMovingAvg": 1850
+        },
+        {
+          "date": "2024-01-15",
+          "caloriesMovingAvg": 1975
+        }
+        // ... more moving averages
+      ],
+      "summary": {
+        "calories": {
+          "total": 13300,
+          "average": 1900,
+          "min": 1200,
+          "max": 2500
+        },
+        "protein": {
+          "total": 525,
+          "average": 75.0
+        },
+        "carbs": {
+          "total": 1540,
+          "average": 220.0
+        },
+        "fats": {
+          "total": 455,
+          "average": 65.0
+        }
+      },
+      "timeRange": {
+        "type": "weekly",
+        "startDate": "2024-01-14",
+        "endDate": "2024-01-20",
+        "dayCount": 7
+      },
+      "chartData": {
+        "calories": [
+          {
+            "date": "2024-01-14",
+            "value": 1850,
+            "movingAverage": 1850
+          }
+        ],
+        "protein": [
+          {
+            "date": "2024-01-14",
+            "value": 75
+          }
+        ],
+        "carbs": [
+          {
+            "date": "2024-01-14",
+            "value": 220
+          }
+        ],
+        "fats": [
+          {
+            "date": "2024-01-14",
+            "value": 65
+          }
+        ]
+      }
+    }
+  }
+
+  💧 Water Intake Graph Output (/api/tracking/water)
+
+  {
+    "success": true,
+    "message": "Water intake graph data retrieved for weekly view (7 days)",
+    "data": {
+      "graphData": [
+        {
+          "date": "2024-01-14",
+          "waterIntake": 8,
+          "itemsCount": 5
+        },
+        {
+          "date": "2024-01-15",
+          "waterIntake": 6,
+          "itemsCount": 6
+        }
+        // ... more days
+      ],
+      "movingAverages": [
+        {
+          "date": "2024-01-14",
+          "waterMovingAvg": 8.0
+        },
+        {
+          "date": "2024-01-15",
+          "waterMovingAvg": 7.0
+        }
+        // ... more moving averages
+      ],
+      "summary": {
+        "waterIntake": {
+          "total": 56,
+          "average": 8.0,
+          "min": 4,
+          "max": 10
+        },
+        "hydrationGoal": {
+          "daily": 8,
+          "totalMet": 5,
+          "percentageMet": 71
+        }
+      },
+      "timeRange": {
+        "type": "weekly",
+        "startDate": "2024-01-14",
+        "endDate": "2024-01-20",
+        "dayCount": 7
+      },
+      "chartData": {
+        "waterIntake": [
+          {
+            "date": "2024-01-14",
+            "value": 8,
+            "movingAverage": 8.0,
+            "goalMet": true
+          },
+          {
+            "date": "2024-01-15",
+            "value": 6,
+            "movingAverage": 7.0,
+            "goalMet": false
+          }
+        ]
+      }
+    }
+  }
+
+  📊 Key Differences:
+
+  Calorie Endpoint (/api/tracking/calories):
+
+  - Metrics: Calories, protein, carbs, fats
+  - Moving Averages: Smooths calorie trends
+  - No Goals: No target/goal functionality
+  - Focus: Nutritional intake visualization
+
+  Water Endpoint (/api/tracking/water):
+
+  - Metrics: Water intake only
+  - Moving Averages: Smooths hydration trends
+  - Goals: Built-in 8-glasses daily goal tracking
+  - Goal Met: Boolean showing if daily goal achieved
+  - Hydration Stats: Percentage of days goal was met
+
+  🎯 For Chart Implementation:
+
+  Calorie Charts:
+  // Perfect for line/bar charts showing calories over time
+  const caloriesChart = response.data.chartData.calories.map(day => ({
+    x: day.date,
+    y: day.value,
+    movingAvg: day.movingAverage
+  }));
+
+  Water Charts:
+  // Perfect for showing hydration progress and goal achievement
+  const waterChart = response.data.chartData.waterIntake.map(day => ({
+    x: day.date,
+    y: day.value,
+    goalMet: day.goalMet,
+    movingAvg: day.movingAverage
+  }));
+
+  // Goal line at y=8
+  const hydrationGoal = response.data.summary.hydrationGoal.daily;
+
+  The data is chart-ready and works perfectly with libraries like Chart.js, D3.js, or Recharts!
