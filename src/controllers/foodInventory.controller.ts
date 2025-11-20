@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import FoodInventory from "../schemas/foodInventory.schema";
+import FoodInventory from "../schemas/foodInventory.schema.js";
 
 // GET /api/food-inventory
 export const getFoodInventory = async (req: Request, res: Response) => {

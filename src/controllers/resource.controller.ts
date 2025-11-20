@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import resourceSchema from "../schemas/resource.schema";
+import resourceSchema from "../schemas/resource.schema.js";
 
 export const getResources = async (req: Request, res: Response) => {
   try {

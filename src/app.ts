@@ -24,26 +24,30 @@ const app = express();
 app.set('trust proxy', true);
 
 // ---------------- CORE MIDDLEWARE ----------------
-// FIX 1: CORS must be the FIRST middleware - handle OPTIONS immediately
+// CRITICAL: CORS must be the absolute FIRST middleware - handle OPTIONS immediately
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://nutrimate-bice.vercel.app");
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS,PATCH");
-
+  // Set CORS headers on EVERY response
+  res.setHeader("Access-Control-Allow-Origin", "https://nutrimate-bice.vercel.app");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS,PATCH");
+  
+  // Immediately respond to OPTIONS with 204 No Content
   if (req.method === "OPTIONS") {
-    return res.sendStatus(200); // VERY IMPORTANT - respond immediately to preflight
+    res.status(204).end();
+    return;
   }
 
   next();
 });
 
-// FIX 2: Also enable cors() library
+// Backup: Also use cors() library
 app.use(
   cors({
     origin: "https://nutrimate-bice.vercel.app",
     credentials: true,
-    methods: "GET,POST,PUT,DELETE,OPTIONS,PATCH",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
   })
 );
 
