@@ -10,6 +10,7 @@ import userRoutes from "./routes/user.routes.js";
 import inventoryRoutes from "./routes/inventory.routes.js";
 import dailyLogRoutes from "./routes/daily-log.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
+import communityRoutes from "./routes/community.routes.js";
 import resourceRoutes from "./routes/resource.route.js";
 import trackingRoutes from "./routes/tracking.routes.js";
 
@@ -21,7 +22,6 @@ const app = express();
 app.use(helmet()); // Security headers
 
 // ---------------- CORE MIDDLEWARE ----------------
-app.use(express.json());
 app.use(
   cors({
     origin:
@@ -49,6 +49,11 @@ const limiter = rateLimit({
 });
 
 app.use(limiter); // Apply rate limiting after CORS
+
+// Body parser middleware - MUST be before routes
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
 
 // ---------------- DATABASE ----------------
 connectDB();
@@ -79,6 +84,8 @@ app.use("/api/resources", resourceRoutes);
 app.use("/api/upload", uploadRoutes);
 
 app.use("/api/tracking", trackingRoutes);
+// Community routes (protected)
+app.use("/api/communities", communityRoutes);
 
 // API info route
 app.get("/api", (_req, res) => {
