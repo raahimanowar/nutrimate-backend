@@ -23,22 +23,34 @@ const app = express();
 // Trust proxy settings for proper IP detection behind reverse proxies
 app.set('trust proxy', true);
 
-// ---------------- SECURITY MIDDLEWARE ----------------
-app.use(helmet()); // Security headers
-
 // ---------------- CORE MIDDLEWARE ----------------
+// FIX 1: CORS must be the FIRST middleware - handle OPTIONS immediately
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "https://nutrimate-bice.vercel.app");
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS,PATCH");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200); // VERY IMPORTANT - respond immediately to preflight
+  }
+
+  next();
+});
+
+// FIX 2: Also enable cors() library
 app.use(
   cors({
-    origin:
-      process.env.NODE_ENV === "production"
-        ? ["https://nutrimate-bice.vercel.app"]
-        : "*",
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    origin: "https://nutrimate-bice.vercel.app",
     credentials: true,
+    methods: "GET,POST,PUT,DELETE,OPTIONS,PATCH",
   })
 );
 
+// ---------------- SECURITY MIDDLEWARE ----------------
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+})); // Security headers
 
 // Body parser middleware - MUST be before routes
 app.use(express.json({ limit: '10mb' }));

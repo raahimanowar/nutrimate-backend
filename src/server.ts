@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import dotenv from "dotenv";
 import cors from "cors";
+import helmet from "helmet";
 import { logger } from "./utils/logger.js";
 import { connectDB } from "./db/db.js";
 
@@ -12,6 +13,7 @@ import uploadRoutes from "./routes/upload.routes.js";
 import communityRoutes from "./routes/community.routes.js";
 import resourceRoutes from "./routes/resource.route.js";
 import trackingRoutes from "./routes/tracking.routes.js";
+import foodInventoryRoutes from "./routes/foodInventory.routes";
 import foodImageRoutes from "./routes/food-image.routes.js";
 
 dotenv.config();
@@ -20,17 +22,33 @@ const app = express();
 
 app.set("trust proxy", true);
 
+// FIX 1: CORS must be the FIRST middleware - handle OPTIONS immediately
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "https://nutrimate-bice.vercel.app");
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS,PATCH");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200); // VERY IMPORTANT - respond immediately to preflight
+  }
+
+  next();
+});
+
+// FIX 2: Also enable cors() library
 app.use(
   cors({
-    origin:
-      process.env.NODE_ENV === "production"
-        ? ["https://nutrimate-bice.vercel.app"]
-        : "*",
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    origin: "https://nutrimate-bice.vercel.app",
     credentials: true,
+    methods: "GET,POST,PUT,DELETE,OPTIONS,PATCH",
   })
 );
+
+// Security headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -49,6 +67,7 @@ app.use("/api/resources", resourceRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/tracking", trackingRoutes);
 app.use("/api/communities", communityRoutes);
+app.use("/api/food-inventory", foodInventoryRoutes);
 app.use("/api/food-images", foodImageRoutes);
 
 app.get("/api", (_req: Request, res: Response) => {
@@ -67,7 +86,11 @@ app.use((err: any, req: any, res: any, next: any) => {
 
   try {
     // Check if res is a valid Express response object
-    if (res && typeof res.status === 'function' && typeof res.json === 'function') {
+    if (
+      res &&
+      typeof res.status === "function" &&
+      typeof res.json === "function"
+    ) {
       return res.status(500).json({
         success: false,
         message: err.message || "Internal Server Error",
@@ -75,22 +98,32 @@ app.use((err: any, req: any, res: any, next: any) => {
     }
 
     // Fallback: Try to send response using basic methods
-    if (res && typeof res.writeHead === 'function' && typeof res.end === 'function') {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({
-        success: false,
-        message: err.message || "Internal Server Error",
-      }));
+    if (
+      res &&
+      typeof res.writeHead === "function" &&
+      typeof res.end === "function"
+    ) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      return res.end(
+        JSON.stringify({
+          success: false,
+          message: err.message || "Internal Server Error",
+        })
+      );
     }
 
     // Last resort: Log and call next to prevent hanging
-    console.error('Could not send error response - response object:', typeof res, res);
-    if (typeof next === 'function') {
+    console.error(
+      "Could not send error response - response object:",
+      typeof res,
+      res
+    );
+    if (typeof next === "function") {
       next(err);
     }
   } catch (error) {
-    console.error('Error in error handler:', error);
-    if (typeof next === 'function') {
+    console.error("Error in error handler:", error);
+    if (typeof next === "function") {
       next(err);
     }
   }
