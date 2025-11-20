@@ -13,6 +13,11 @@ interface AuthRequest extends Request {
 
 export const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    // Skip authentication for OPTIONS requests (CORS preflight)
+    if (req.method === 'OPTIONS') {
+      return next();
+    }
+
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
