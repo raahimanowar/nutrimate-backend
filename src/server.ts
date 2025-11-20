@@ -12,6 +12,7 @@ import uploadRoutes from "./routes/upload.routes.js";
 import communityRoutes from "./routes/community.routes.js";
 import resourceRoutes from "./routes/resource.route.js";
 import trackingRoutes from "./routes/tracking.routes.js";
+import foodInventoryRoutes from "./routes/foodInventory.routes";
 
 dotenv.config();
 
@@ -48,6 +49,7 @@ app.use("/api/resources", resourceRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/tracking", trackingRoutes);
 app.use("/api/communities", communityRoutes);
+app.use("/api/food-inventory", foodInventoryRoutes);
 
 app.get("/api", (_req: Request, res: Response) => {
   res.json({
@@ -65,7 +67,11 @@ app.use((err: any, req: any, res: any, next: any) => {
 
   try {
     // Check if res is a valid Express response object
-    if (res && typeof res.status === 'function' && typeof res.json === 'function') {
+    if (
+      res &&
+      typeof res.status === "function" &&
+      typeof res.json === "function"
+    ) {
       return res.status(500).json({
         success: false,
         message: err.message || "Internal Server Error",
@@ -73,22 +79,32 @@ app.use((err: any, req: any, res: any, next: any) => {
     }
 
     // Fallback: Try to send response using basic methods
-    if (res && typeof res.writeHead === 'function' && typeof res.end === 'function') {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({
-        success: false,
-        message: err.message || "Internal Server Error",
-      }));
+    if (
+      res &&
+      typeof res.writeHead === "function" &&
+      typeof res.end === "function"
+    ) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      return res.end(
+        JSON.stringify({
+          success: false,
+          message: err.message || "Internal Server Error",
+        })
+      );
     }
 
     // Last resort: Log and call next to prevent hanging
-    console.error('Could not send error response - response object:', typeof res, res);
-    if (typeof next === 'function') {
+    console.error(
+      "Could not send error response - response object:",
+      typeof res,
+      res
+    );
+    if (typeof next === "function") {
       next(err);
     }
   } catch (error) {
-    console.error('Error in error handler:', error);
-    if (typeof next === 'function') {
+    console.error("Error in error handler:", error);
+    if (typeof next === "function") {
       next(err);
     }
   }
