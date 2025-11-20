@@ -2,7 +2,6 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
 import { logger } from "./utils/logger.js";
 import { connectDB } from "./db/db.js";
 import authRoutes from "./routes/auth.routes.js";
@@ -20,8 +19,8 @@ dotenv.config();
 const app = express();
 
 // ---------------- PROXY CONFIGURATION ----------------
-// Trust proxy settings for proper rate limiting behind reverse proxies
-app.set('trust proxy', process.env.TRUST_PROXY || true);
+// Trust proxy settings for proper IP detection behind reverse proxies
+app.set('trust proxy', true);
 
 // ---------------- SECURITY MIDDLEWARE ----------------
 app.use(helmet()); // Security headers
@@ -39,25 +38,6 @@ app.use(
   })
 );
 
-// Rate limiting (configurable via environment) - AFTER CORS
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000"), // 15 minutes default
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100"), // 100 requests default
-  message: {
-    success: false,
-    message: "Too many requests from this IP, please try again later.",
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  // Skip rate limiting for OPTIONS requests (CORS preflight)
-  skip: (req) => req.method === "OPTIONS",
-  // Ensure proper IP identification when trust proxy is enabled
-  keyGenerator: (req) => {
-    return req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
-  },
-});
-
-app.use(limiter); // Apply rate limiting after CORS
 
 // Body parser middleware - MUST be before routes
 app.use(express.json({ limit: '10mb' }));
