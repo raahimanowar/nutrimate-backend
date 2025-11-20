@@ -1,7 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Request, Response } from "express";
 import FoodInventory from "../schemas/foodInventory.schema.js";
 
-// GET /api/food-inventory
 export const getFoodInventory = async (req: Request, res: Response) => {
   try {
     const { category } = req.query;
@@ -11,7 +11,7 @@ export const getFoodInventory = async (req: Request, res: Response) => {
 
     const items = await FoodInventory.find(query).sort({ name: 1 });
     console.log(items);
-    
+
     res.json({
       success: true,
       items,
