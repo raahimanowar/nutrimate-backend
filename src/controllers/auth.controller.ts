@@ -10,13 +10,13 @@ export const register = async (req: Request, res: Response) => {
 
     // Check if user already exists
     const existingUser = await User.findOne({
-      $or: [{ email }, { username }]
+      $or: [{ email }, { username }],
     });
 
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: "User with this email or username already exists"
+        message: "User with this email or username already exists",
       });
     }
 
@@ -27,8 +27,9 @@ export const register = async (req: Request, res: Response) => {
     // Create new user
     const newUser = new User({
       username,
+      fullname: username,
       email,
-      password: hashedPassword
+      password: hashedPassword,
     });
 
     await newUser.save();
@@ -38,10 +39,10 @@ export const register = async (req: Request, res: Response) => {
       {
         userId: newUser._id,
         username: newUser.username,
-        email: newUser.email
+        email: newUser.email,
       },
       process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
+      { expiresIn: "7d" }
     );
 
     logger.info(`New user registered: ${username} (${email})`);
@@ -54,17 +55,17 @@ export const register = async (req: Request, res: Response) => {
         user: {
           id: newUser._id,
           username: newUser.username,
+          fullname: newUser.fullname,
           email: newUser.email,
-          role: newUser.role
-        }
-      }
+          role: newUser.role,
+        },
+      },
     });
-
   } catch (error) {
     logger.error(`Registration error: ${(error as Error).message}`);
     res.status(500).json({
       success: false,
-      message: "Internal server error during registration"
+      message: "Internal server error during registration",
     });
   }
 };
@@ -75,13 +76,13 @@ export const login = async (req: Request, res: Response) => {
 
     // Find user by username or email
     const user = await User.findOne({
-      $or: [{ email: identifier }, { username: identifier }]
+      $or: [{ email: identifier }, { username: identifier }],
     });
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials"
+        message: "Invalid credentials",
       });
     }
 
@@ -91,7 +92,7 @@ export const login = async (req: Request, res: Response) => {
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
-        message: "Invalid credentials"
+        message: "Invalid credentials",
       });
     }
 
@@ -100,10 +101,10 @@ export const login = async (req: Request, res: Response) => {
       {
         userId: user._id,
         username: user.username,
-        email: user.email
+        email: user.email,
       },
       process.env.JWT_SECRET!,
-      { expiresIn: '7d' }
+      { expiresIn: "7d" }
     );
 
     logger.info(`User logged in: ${user.username} (${user.email})`);
@@ -117,16 +118,15 @@ export const login = async (req: Request, res: Response) => {
           id: user._id,
           username: user.username,
           email: user.email,
-          role: user.role
-        }
-      }
+          role: user.role,
+        },
+      },
     });
-
   } catch (error) {
     logger.error(`Login error: ${(error as Error).message}`);
     res.status(500).json({
       success: false,
-      message: "Internal server error during login"
+      message: "Internal server error during login",
     });
   }
 };

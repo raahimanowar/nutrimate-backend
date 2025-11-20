@@ -1,10 +1,9 @@
-import express from "express";
+import express, { Request, Response } from "express";
 import dotenv from "dotenv";
 import cors from "cors";
-import helmet from "helmet";
-import rateLimit from "express-rate-limit";
 import { logger } from "./utils/logger.js";
 import { connectDB } from "./db/db.js";
+
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import inventoryRoutes from "./routes/inventory.routes.js";
@@ -13,93 +12,103 @@ import uploadRoutes from "./routes/upload.routes.js";
 import communityRoutes from "./routes/community.routes.js";
 import resourceRoutes from "./routes/resource.route.js";
 import trackingRoutes from "./routes/tracking.routes.js";
+import foodInventoryRoutes from "./routes/foodInventory.routes";
 
 dotenv.config();
 
 const app = express();
 
-// ---------------- SECURITY MIDDLEWARE ----------------
-app.use(helmet()); // Security headers
+app.set("trust proxy", true);
 
-// ---------------- CORE MIDDLEWARE ----------------
 app.use(
   cors({
     origin:
       process.env.NODE_ENV === "production"
-        ? process.env.FRONTEND_URL || "https://yourdomain.com" // Restrict to your frontend domain in production
-        : "*", // Allow all origins in development
+        ? ["https://nutrimate-bice.vercel.app"]
+        : "*",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   })
 );
 
-// Rate limiting (configurable via environment) - AFTER CORS
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000"), // 15 minutes default
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100"), // 100 requests default
-  message: {
-    success: false,
-    message: "Too many requests from this IP, please try again later.",
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  // Skip rate limiting for OPTIONS requests (CORS preflight)
-  skip: (req) => req.method === "OPTIONS",
-});
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-app.use(limiter); // Apply rate limiting after CORS
-
-// Body parser middleware - MUST be before routes
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
-
-
-// ---------------- DATABASE ----------------
 connectDB();
 
-// ---------------- ROUTES ----------------
-app.get("/", (_req, res) => {
+app.get("/", (_req: Request, res: Response) => {
   res.redirect("/api");
 });
 
-// Tasks routes
-// app.use("/api/tasks", tasksRouter);
-
-// Auth routes
 app.use("/api/auth", authRoutes);
-
-// User routes (protected)
 app.use("/api/users", userRoutes);
-
-// Inventory routes (protected)
 app.use("/api/inventory", inventoryRoutes);
-
-// Daily log routes (protected)
 app.use("/api/daily-log", dailyLogRoutes);
-// Resource routes <- added
 app.use("/api/resources", resourceRoutes);
-
-// Upload routes (protected)
 app.use("/api/upload", uploadRoutes);
-
 app.use("/api/tracking", trackingRoutes);
-// Community routes (protected)
 app.use("/api/communities", communityRoutes);
+app.use("/api/food-inventory", foodInventoryRoutes);
 
-// API info route
-app.get("/api", (_req, res) => {
-  const response = {
+app.get("/api", (_req: Request, res: Response) => {
+  res.json({
     status: "ok",
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
     message: "Server is running!!!",
     version: "1.0.0",
-  };
-  res.json(response);
+  });
 });
 
-// ---------------- SERVER ----------------
+// Error handler
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error(err.stack); // Log full error stack
+
+  try {
+    // Check if res is a valid Express response object
+    if (
+      res &&
+      typeof res.status === "function" &&
+      typeof res.json === "function"
+    ) {
+      return res.status(500).json({
+        success: false,
+        message: err.message || "Internal Server Error",
+      });
+    }
+
+    // Fallback: Try to send response using basic methods
+    if (
+      res &&
+      typeof res.writeHead === "function" &&
+      typeof res.end === "function"
+    ) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      return res.end(
+        JSON.stringify({
+          success: false,
+          message: err.message || "Internal Server Error",
+        })
+      );
+    }
+
+    // Last resort: Log and call next to prevent hanging
+    console.error(
+      "Could not send error response - response object:",
+      typeof res,
+      res
+    );
+    if (typeof next === "function") {
+      next(err);
+    }
+  } catch (error) {
+    console.error("Error in error handler:", error);
+    if (typeof next === "function") {
+      next(err);
+    }
+  }
+});
 const port = Number(process.env.PORT) || 5000;
 
 app.listen(port, () => {

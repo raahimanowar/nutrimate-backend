@@ -3,22 +3,21 @@ import { logger } from "../utils/logger.js";
 import User from "../schemas/users.schema.js";
 import { AuthRequest } from "../types/auth.types.js";
 
-// Get user profile (protected route)
 export const getProfile = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({
         success: false,
-        message: "Authentication required"
+        message: "Authentication required",
       });
     }
 
-    const user = await User.findById(req.user.userId).select('-password');
+    const user = await User.findById(req.user.userId).select("-password");
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found"
+        message: "User not found",
       });
     }
 
@@ -28,82 +27,83 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
       data: {
         id: user._id,
         username: user.username,
+        fullname: user.fullname,
         email: user.email,
         height: user.height,
         weight: user.weight,
         address: user.address,
         profilePic: user.profilePic,
         dateOfBirth: user.dateOfBirth,
+        householdSize: user.householdSize,
         budgetPreferences: user.budgetPreferences,
         dietaryNeeds: user.dietaryNeeds,
         role: user.role,
         createdAt: user.createdAt,
-        updatedAt: user.updatedAt
-      }
+        updatedAt: user.updatedAt,
+      },
     });
-
   } catch (error) {
     logger.error(`Get profile error: ${(error as Error).message}`);
     res.status(500).json({
       success: false,
-      message: "Internal server error while fetching profile"
+      message: "Internal server error while fetching profile",
     });
   }
 };
 
-// Update user profile (protected route)
 export const updateProfile = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({
         success: false,
-        message: "Authentication required"
+        message: "Authentication required",
       });
     }
 
     const {
+      fullname,
       height,
       weight,
       address,
       profilePic,
       dateOfBirth,
       budgetPreferences,
-      dietaryNeeds
+      dietaryNeeds,
+      householdSize,
     } = req.body;
 
-    const updateData: any = {
-      height,
-      weight,
-      address,
-      profilePic,
-      dateOfBirth
-    };
+    const updateData: Partial<{
+      fullname: string;
+      height: number;
+      weight: number;
+      address: { country?: string; city?: string };
+      profilePic: string;
+      dateOfBirth: Date;
+      budgetPreferences: typeof User.schema.obj.budgetPreferences;
+      dietaryNeeds: typeof User.schema.obj.dietaryNeeds;
+      householdSize: number;
+    }> = {};
 
-    // Add budget preferences if provided
-    if (budgetPreferences) {
-      updateData.budgetPreferences = budgetPreferences;
-    }
-
-    // Add dietary needs if provided
-    if (dietaryNeeds) {
-      updateData.dietaryNeeds = dietaryNeeds;
-    }
-
-    // Handle profilePic separately - only update if explicitly provided
-    if (profilePic !== undefined) {
-      updateData.profilePic = profilePic;
-    }
+    if (fullname !== undefined) updateData.fullname = fullname;
+    if (height !== undefined) updateData.height = height;
+    if (weight !== undefined) updateData.weight = weight;
+    if (address !== undefined) updateData.address = address;
+    if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth;
+    if (householdSize !== undefined) updateData.householdSize = householdSize;
+    if (budgetPreferences) updateData.budgetPreferences = budgetPreferences;
+    if (dietaryNeeds) updateData.dietaryNeeds = dietaryNeeds;
+    if (profilePic !== undefined) updateData.profilePic = profilePic;
 
     const updatedUser = await User.findByIdAndUpdate(
       req.user.userId,
       updateData,
       { new: true, runValidators: true }
-    ).select('-password');
+    ).select("-password");
 
     if (!updatedUser) {
       return res.status(404).json({
         success: false,
-        message: "User not found"
+        message: "User not found",
       });
     }
 
@@ -115,24 +115,25 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
       data: {
         id: updatedUser._id,
         username: updatedUser.username,
+        fullname: updatedUser.fullname,
         email: updatedUser.email,
         height: updatedUser.height,
         weight: updatedUser.weight,
         address: updatedUser.address,
         profilePic: updatedUser.profilePic,
         dateOfBirth: updatedUser.dateOfBirth,
+        householdSize: updatedUser.householdSize,
         budgetPreferences: updatedUser.budgetPreferences,
         dietaryNeeds: updatedUser.dietaryNeeds,
         role: updatedUser.role,
-        updatedAt: updatedUser.updatedAt
-      }
+        updatedAt: updatedUser.updatedAt,
+      },
     });
-
   } catch (error) {
     logger.error(`Update profile error: ${(error as Error).message}`);
     res.status(500).json({
       success: false,
-      message: "Internal server error while updating profile"
+      message: "Internal server error while updating profile",
     });
   }
 };

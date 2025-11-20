@@ -1,6 +1,7 @@
 # dev
 .yarn/
 !.yarn/releases
+.pnpm/
 .vscode/*
 !.vscode/launch.json
 !.vscode/*.code-snippets
@@ -26,6 +27,14 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+
+# pnpm
+pnpm-lock.yaml
+.pnpm-store
+.pnpmrc
+
+# npm config
+.npmrc
 
 # misc
 .DS_Store
