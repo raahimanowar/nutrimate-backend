@@ -31,8 +31,8 @@ app.use(
   cors({
     origin:
       process.env.NODE_ENV === "production"
-        ? process.env.FRONTEND_URL || "https://yourdomain.com" // Restrict to your frontend domain in production
-        : "*", // Allow all origins in development
+        ? ["https://nutrimate-bice.vercel.app"]
+        : "*",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
