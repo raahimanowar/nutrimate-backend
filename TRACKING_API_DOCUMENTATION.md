@@ -35,6 +35,134 @@ GET /api/tracking/summary?startDate=2024-01-01&endDate=2024-01-31
 
 ---
 
+## Get Calorie Graph Data
+
+**GET** `/api/tracking/calories`
+**Headers:** `Authorization: Bearer <jwt_token>`
+
+**Query Parameters:**
+```
+range: daily | weekly | monthly | custom (default: weekly)
+startDate: YYYY-MM-DD (for custom range)
+endDate: YYYY-MM-DD (for custom range)
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Calorie graph data retrieved for weekly view (7 days)",
+  "data": {
+    "chartData": {
+      "calories": [
+        {
+          "date": "2024-01-20",
+          "value": 1850,
+          "movingAverage": 1900
+        }
+      ],
+      "protein": [
+        {
+          "date": "2024-01-20",
+          "value": 75
+        }
+      ],
+      "carbs": [
+        {
+          "date": "2024-01-20",
+          "value": 220
+        }
+      ],
+      "fats": [
+        {
+          "date": "2024-01-20",
+          "value": 65
+        }
+      ]
+    },
+    "summary": {
+      "calories": {
+        "average": 1900,
+        "min": 1200,
+        "max": 2500
+      }
+    }
+  }
+}
+```
+
+**Examples:**
+```bash
+# Last 7 days
+GET /api/tracking/calories
+
+# Last 30 days
+GET /api/tracking/calories?range=monthly
+
+# Custom date range
+GET /api/tracking/calories?startDate=2024-01-01&endDate=2024-01-31
+```
+
+---
+
+## Get Water Intake Graph Data
+
+**GET** `/api/tracking/water`
+**Headers:** `Authorization: Bearer <jwt_token>`
+
+**Query Parameters:**
+```
+range: daily | weekly | monthly | custom (default: weekly)
+startDate: YYYY-MM-DD (for custom range)
+endDate: YYYY-MM-DD (for custom range)
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Water intake graph data retrieved for weekly view (7 days)",
+  "data": {
+    "chartData": {
+      "waterIntake": [
+        {
+          "date": "2024-01-20",
+          "value": 8,
+          "movingAverage": 7.5,
+          "goalMet": true
+        }
+      ]
+    },
+    "summary": {
+      "waterIntake": {
+        "average": 7.5,
+        "min": 4,
+        "max": 10
+      },
+      "hydrationGoal": {
+        "daily": 8,
+        "totalMet": 5,
+        "percentageMet": 71
+      }
+    }
+  }
+}
+```
+
+**Examples:**
+```bash
+# Last 7 days
+GET /api/tracking/water
+
+# Last 30 days
+GET /api/tracking/water?range=monthly
+
+# Custom date range
+GET /api/tracking/water?startDate=2024-01-01&endDate=2024-01-31
+```
+
+---
+
 ## Response
 
 ```json
@@ -141,6 +269,25 @@ GET /api/tracking/summary?range=monthly
 
 # Custom period - specific date range
 GET /api/tracking/summary?startDate=2024-01-01&endDate=2024-01-31
+
+# Get calorie graph data
+GET /api/tracking/calories?range=weekly
+
+# Get water intake graph data
+GET /api/tracking/water?range=weekly
+```
+
+**Graph Data Usage:**
+```bash
+# Get calorie data for charts
+GET /api/tracking/calories?range=monthly
+
+# Get water intake data for charts
+GET /api/tracking/water?range=monthly
+
+# Custom date ranges
+GET /api/tracking/calories?startDate=2024-01-01&endDate=2024-01-31
+GET /api/tracking/water?startDate=2024-01-01&endDate=2024-01-31
 ```
 
 ---

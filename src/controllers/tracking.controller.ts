@@ -320,3 +320,334 @@ export const getTrackingSummary = async (req: AuthRequest, res: Response): Promi
     });
   }
 };
+
+// Get calorie tracking data for graphs
+export const getCalorieGraphData = async (req: AuthRequest, res: Response): Promise<Response> => {
+  try {
+    if (!req.user) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required" });
+    }
+
+    const userId = req.user.userId;
+
+    // Calculate date range based on query parameters
+    const dateRange = calculateDateRange(req.query);
+
+    // Get daily logs for the specified date range
+    const dailyLogs = await DailyLog.find({
+      userId,
+      date: { $gte: dateRange.startDate, $lte: dateRange.endDate },
+    })
+    .sort({ date: 'asc' }) // Sort by date for graph display
+    .select('date totalCalories totalProtein totalCarbs totalFats items');
+
+    // Format data for calorie graph consumption
+    const graphData = dailyLogs.map((log) => ({
+      date: log.date.toISOString().split('T')[0], // YYYY-MM-DD format
+      calories: log.totalCalories || 0,
+      protein: log.totalProtein || 0,
+      carbs: log.totalCarbs || 0,
+      fats: log.totalFats || 0,
+      itemsCount: log.items.length
+    }));
+
+    // Calculate summary statistics for calories
+    const totalDays = graphData.length;
+    const summary = {
+      calories: {
+        total: graphData.reduce((sum, day) => sum + day.calories, 0),
+        average: totalDays > 0 ? Math.round(graphData.reduce((sum, day) => sum + day.calories, 0) / totalDays) : 0,
+        min: totalDays > 0 ? Math.min(...graphData.map(day => day.calories)) : 0,
+        max: totalDays > 0 ? Math.max(...graphData.map(day => day.calories)) : 0,
+      },
+      protein: {
+        total: graphData.reduce((sum, day) => sum + day.protein, 0),
+        average: totalDays > 0 ? Math.round(graphData.reduce((sum, day) => sum + day.protein, 0) / totalDays * 10) / 10 : 0,
+      },
+      carbs: {
+        total: graphData.reduce((sum, day) => sum + day.carbs, 0),
+        average: totalDays > 0 ? Math.round(graphData.reduce((sum, day) => sum + day.carbs, 0) / totalDays * 10) / 10 : 0,
+      },
+      fats: {
+        total: graphData.reduce((sum, day) => sum + day.fats, 0),
+        average: totalDays > 0 ? Math.round(graphData.reduce((sum, day) => sum + day.fats, 0) / totalDays * 10) / 10 : 0,
+      }
+    };
+
+    // Calculate moving averages for smoother calorie graph
+    const movingAverages = graphData.map((day, index) => {
+      const windowSize = Math.min(7, index + 1); // 7-day moving average
+      const startIdx = Math.max(0, index - windowSize + 1);
+      const windowData = graphData.slice(startIdx, index + 1);
+
+      return {
+        date: day.date,
+        caloriesMovingAvg: windowData.length > 0 ? Math.round(windowData.reduce((sum, d) => sum + d.calories, 0) / windowData.length) : 0,
+      };
+    });
+
+    const response = {
+      success: true,
+      message: `Calorie graph data retrieved for ${dateRange.rangeType} view (${dateRange.dayCount} days)`,
+      data: {
+        graphData,
+        movingAverages,
+        summary,
+        timeRange: {
+          type: dateRange.rangeType,
+          startDate: dateRange.startDateString,
+          endDate: dateRange.endDateString,
+          dayCount: dateRange.dayCount,
+        },
+        chartData: {
+          // Pre-formatted for easy chart consumption
+          calories: graphData.map(day => ({
+            date: day.date,
+            value: day.calories,
+            movingAverage: movingAverages.find(ma => ma.date === day.date)?.caloriesMovingAvg || 0
+          })),
+          protein: graphData.map(day => ({
+            date: day.date,
+            value: day.protein
+          })),
+          carbs: graphData.map(day => ({
+            date: day.date,
+            value: day.carbs
+          })),
+          fats: graphData.map(day => ({
+            date: day.date,
+            value: day.fats
+          }))
+        }
+      }
+    };
+
+    return res.status(200).json(response);
+  } catch (error) {
+    logger.error(`Calorie graph data error: ${(error as Error).message}`);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while fetching calorie graph data"
+    });
+  }
+};
+
+// Get water intake tracking data for graphs
+export const getWaterGraphData = async (req: AuthRequest, res: Response): Promise<Response> => {
+  try {
+    if (!req.user) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required" });
+    }
+
+    const userId = req.user.userId;
+
+    // Calculate date range based on query parameters
+    const dateRange = calculateDateRange(req.query);
+
+    // Get daily logs for the specified date range
+    const dailyLogs = await DailyLog.find({
+      userId,
+      date: { $gte: dateRange.startDate, $lte: dateRange.endDate },
+    })
+    .sort({ date: 'asc' }) // Sort by date for graph display
+    .select('date waterIntake items');
+
+    // Format data for water intake graph consumption
+    const graphData = dailyLogs.map((log) => ({
+      date: log.date.toISOString().split('T')[0], // YYYY-MM-DD format
+      waterIntake: log.waterIntake || 0,
+      itemsCount: log.items.length
+    }));
+
+    // Calculate summary statistics for water intake
+    const totalDays = graphData.length;
+    const summary = {
+      waterIntake: {
+        total: graphData.reduce((sum, day) => sum + day.waterIntake, 0),
+        average: totalDays > 0 ? Math.round(graphData.reduce((sum, day) => sum + day.waterIntake, 0) / totalDays * 10) / 10 : 0,
+        min: totalDays > 0 ? Math.min(...graphData.map(day => day.waterIntake)) : 0,
+        max: totalDays > 0 ? Math.max(...graphData.map(day => day.waterIntake)) : 0,
+      },
+      hydrationGoal: {
+        daily: 8, // Standard 8 glasses recommendation
+        totalMet: graphData.filter(day => day.waterIntake >= 8).length,
+        percentageMet: totalDays > 0 ? Math.round((graphData.filter(day => day.waterIntake >= 8).length / totalDays) * 100) : 0
+      }
+    };
+
+    // Calculate moving averages for smoother water intake graph
+    const movingAverages = graphData.map((day, index) => {
+      const windowSize = Math.min(7, index + 1); // 7-day moving average
+      const startIdx = Math.max(0, index - windowSize + 1);
+      const windowData = graphData.slice(startIdx, index + 1);
+
+      return {
+        date: day.date,
+        waterMovingAvg: windowData.length > 0 ? Math.round(windowData.reduce((sum, d) => sum + d.waterIntake, 0) / windowData.length * 10) / 10 : 0,
+      };
+    });
+
+    const response = {
+      success: true,
+      message: `Water intake graph data retrieved for ${dateRange.rangeType} view (${dateRange.dayCount} days)`,
+      data: {
+        graphData,
+        movingAverages,
+        summary,
+        timeRange: {
+          type: dateRange.rangeType,
+          startDate: dateRange.startDateString,
+          endDate: dateRange.endDateString,
+          dayCount: dateRange.dayCount,
+        },
+        chartData: {
+          // Pre-formatted for easy chart consumption
+          waterIntake: graphData.map(day => ({
+            date: day.date,
+            value: day.waterIntake,
+            movingAverage: movingAverages.find(ma => ma.date === day.date)?.waterMovingAvg || 0,
+            goalMet: day.waterIntake >= 8
+          }))
+        }
+      }
+    };
+
+    return res.status(200).json(response);
+  } catch (error) {
+    logger.error(`Water intake graph data error: ${(error as Error).message}`);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while fetching water intake graph data"
+    });
+  }
+};
+
+// Get tracking data for graphs (calories and water intake) - DEPRECATED
+export const getTrackingGraphData = async (req: AuthRequest, res: Response): Promise<Response> => {
+  try {
+    if (!req.user) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required" });
+    }
+
+    const userId = req.user.userId;
+
+    // Calculate date range based on query parameters
+    const dateRange = calculateDateRange(req.query);
+
+    // Get daily logs for the specified date range
+    const dailyLogs = await DailyLog.find({
+      userId,
+      date: { $gte: dateRange.startDate, $lte: dateRange.endDate },
+    })
+    .sort({ date: 'asc' }) // Sort by date for graph display
+    .select('date totalCalories totalProtein waterIntake items totalFats totalCarbs');
+
+    // Format data for graph consumption
+    const graphData = dailyLogs.map((log) => ({
+      date: log.date.toISOString().split('T')[0], // YYYY-MM-DD format
+      calories: log.totalCalories || 0,
+      protein: log.totalProtein || 0,
+      carbs: log.totalCarbs || 0,
+      fats: log.totalFats || 0,
+      waterIntake: log.waterIntake || 0,
+      itemsCount: log.items.length
+    }));
+
+    // Calculate summary statistics
+    const totalDays = graphData.length;
+    const summary = {
+      calories: {
+        total: graphData.reduce((sum, day) => sum + day.calories, 0),
+        average: totalDays > 0 ? Math.round(graphData.reduce((sum, day) => sum + day.calories, 0) / totalDays) : 0,
+        min: totalDays > 0 ? Math.min(...graphData.map(day => day.calories)) : 0,
+        max: totalDays > 0 ? Math.max(...graphData.map(day => day.calories)) : 0,
+      },
+      waterIntake: {
+        total: graphData.reduce((sum, day) => sum + day.waterIntake, 0),
+        average: totalDays > 0 ? Math.round(graphData.reduce((sum, day) => sum + day.waterIntake, 0) / totalDays * 10) / 10 : 0,
+        min: totalDays > 0 ? Math.min(...graphData.map(day => day.waterIntake)) : 0,
+        max: totalDays > 0 ? Math.max(...graphData.map(day => day.waterIntake)) : 0,
+      },
+      protein: {
+        total: graphData.reduce((sum, day) => sum + day.protein, 0),
+        average: totalDays > 0 ? Math.round(graphData.reduce((sum, day) => sum + day.protein, 0) / totalDays * 10) / 10 : 0,
+      },
+      carbs: {
+        total: graphData.reduce((sum, day) => sum + day.carbs, 0),
+        average: totalDays > 0 ? Math.round(graphData.reduce((sum, day) => sum + day.carbs, 0) / totalDays * 10) / 10 : 0,
+      },
+      fats: {
+        total: graphData.reduce((sum, day) => sum + day.fats, 0),
+        average: totalDays > 0 ? Math.round(graphData.reduce((sum, day) => sum + day.fats, 0) / totalDays * 10) / 10 : 0,
+      }
+    };
+
+    // Calculate moving averages for smoother graphs (optional)
+    const movingAverages = graphData.map((day, index) => {
+      const windowSize = Math.min(7, index + 1); // 7-day moving average
+      const startIdx = Math.max(0, index - windowSize + 1);
+      const windowData = graphData.slice(startIdx, index + 1);
+
+      return {
+        date: day.date,
+        caloriesMovingAvg: windowData.length > 0 ? Math.round(windowData.reduce((sum, d) => sum + d.calories, 0) / windowData.length) : 0,
+        waterMovingAvg: windowData.length > 0 ? Math.round(windowData.reduce((sum, d) => sum + d.waterIntake, 0) / windowData.length * 10) / 10 : 0,
+      };
+    });
+
+    const response = {
+      success: true,
+      message: `Graph data retrieved for ${dateRange.rangeType} view (${dateRange.dayCount} days)`,
+      data: {
+        graphData,
+        movingAverages,
+        summary,
+        timeRange: {
+          type: dateRange.rangeType,
+          startDate: dateRange.startDateString,
+          endDate: dateRange.endDateString,
+          dayCount: dateRange.dayCount,
+        },
+        chartData: {
+          // Pre-formatted for easy chart consumption
+          calories: graphData.map(day => ({
+            date: day.date,
+            value: day.calories,
+            movingAverage: movingAverages.find(ma => ma.date === day.date)?.caloriesMovingAvg || 0
+          })),
+          waterIntake: graphData.map(day => ({
+            date: day.date,
+            value: day.waterIntake,
+            movingAverage: movingAverages.find(ma => ma.date === day.date)?.waterMovingAvg || 0
+          })),
+          protein: graphData.map(day => ({
+            date: day.date,
+            value: day.protein
+          })),
+          carbs: graphData.map(day => ({
+            date: day.date,
+            value: day.carbs
+          })),
+          fats: graphData.map(day => ({
+            date: day.date,
+            value: day.fats
+          }))
+        }
+      }
+    };
+
+    return res.status(200).json(response);
+  } catch (error) {
+    logger.error(`Tracking graph data error: ${(error as Error).message}`);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while fetching tracking graph data"
+    });
+  }
+};
