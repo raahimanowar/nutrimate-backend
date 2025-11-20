@@ -12,6 +12,7 @@ const UserSchema = new mongoose.Schema(
       country: { type: String },
       city: { type: String },
     },
+    householdSize: { type: Number, default: 1 },
     profilePic: { type: String },
     dateOfBirth: { type: Date },
     role: { type: String, default: "user" },
