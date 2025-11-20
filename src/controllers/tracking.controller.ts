@@ -5,6 +5,18 @@ import DailyLog from "../schemas/daily-log.schema.js";
 import Resource from "../schemas/resource.schema.js";
 import { logger } from "../utils/logger.js";
 
+interface TrackingLog {
+  date: string;
+  totalCalories: number;
+  totalProtein: number;
+}
+
+interface RecommendedResource {
+  title: string;
+  url: string;
+  relatedTo: string;
+}
+
 // Rule-based tracking and recommendations
 export const getTrackingSummary = async (req: AuthRequest, res: Response) => {
   try {
@@ -16,35 +28,36 @@ export const getTrackingSummary = async (req: AuthRequest, res: Response) => {
 
     const userId = req.user.userId;
 
-    // 1️⃣ Inventory summary
+    // 1️⃣ Inventory count
     const inventory = await Inventory.find({ userId });
-    const totalItems = inventory.length;
-    const expiringSoon = inventory.filter((item) => {
-      if (!item.hasExpiration || !item.expirationDate) return false;
-      const today = new Date();
-      const threeDaysLater = new Date();
-      threeDaysLater.setDate(today.getDate() + 3);
-      return (
-        item.expirationDate >= today && item.expirationDate <= threeDaysLater
-      );
-    });
+    const inventoryCount = inventory.length;
 
-    const inventorySummary = {
-      totalItems,
-      expiringSoonCount: expiringSoon.length,
-      categories: Array.from(new Set(inventory.map((i) => i.category))),
-    };
-
-    // 2️⃣ Recent daily logs (last 3 days)
+    // 2️⃣ Recent daily logs (last 7 days)
     const today = new Date();
-    const threeDaysAgo = new Date();
-    threeDaysAgo.setDate(today.getDate() - 2);
-    threeDaysAgo.setHours(0, 0, 0, 0);
+    today.setHours(23, 59, 59, 999);
+    
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(today.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
 
     const recentLogs = await DailyLog.find({
       userId,
-      date: { $gte: threeDaysAgo, $lte: today },
+      date: { $gte: sevenDaysAgo, $lte: today },
     }).sort({ date: -1 });
+
+    // Format recent logs with aggregated nutrition data
+    const formattedRecentLogs: TrackingLog[] = recentLogs.map((log) => {
+      // Calculate total protein from all items in the log
+      const totalProtein = log.items.reduce((sum, item) => {
+        return sum + (item.protein || 0);
+      }, 0);
+
+      return {
+        date: log.date.toISOString().split("T")[0],
+        totalCalories: log.totalCalories || 0,
+        totalProtein: Math.round(totalProtein),
+      };
+    });
 
     // 3️⃣ Resource recommendations
     const consumedCategories = Array.from(
@@ -55,29 +68,25 @@ export const getTrackingSummary = async (req: AuthRequest, res: Response) => {
 
     const recommendedResources = await Resource.find({
       category: { $in: consumedCategories },
-    }).limit(10);
+    }).limit(5);
 
-    const recommendations = recommendedResources.map((resItem) => ({
-      _id: resItem._id,
-      title: resItem.title,
-      description: resItem.description,
-      url: resItem.url,
-      category: resItem.category,
-      reason: `Related to: ${resItem.category} category based on recent consumption`,
-    }));
+    // Format recommendations with simplified structure
+    const recommendedResourcesList: RecommendedResource[] = recommendedResources.map(
+      (resItem) => ({
+        title: resItem.title,
+        url: resItem.url || "",
+        relatedTo: `${resItem.category} category`,
+      })
+    );
 
     // Return consolidated tracking summary
     res.status(200).json({
       success: true,
-      message: "Tracking summary retrieved successfully",
+      message: "Basic tracking data retrieved",
       data: {
-        inventory: inventorySummary,
-        recentLogs: recentLogs.map((log) => ({
-          date: log.date.toISOString().split("T")[0],
-          itemsCount: log.items.length,
-          totalCalories: log.totalCalories,
-        })),
-        recommendations,
+        inventoryCount,
+        recentLogs: formattedRecentLogs,
+        recommendedResources: recommendedResourcesList,
       },
     });
   } catch (error) {
