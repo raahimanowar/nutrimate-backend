@@ -20,7 +20,6 @@ const app = express();
 app.use(helmet()); // Security headers
 
 // ---------------- CORE MIDDLEWARE ----------------
-app.use(express.json());
 app.use(
   cors({
     origin:
@@ -48,6 +47,11 @@ const limiter = rateLimit({
 });
 
 app.use(limiter); // Apply rate limiting after CORS
+
+// Body parser middleware - MUST be before routes
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
 
 // ---------------- DATABASE ----------------
 connectDB();
