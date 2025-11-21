@@ -1,7 +1,61 @@
 import { Response } from "express";
 import { logger } from "../utils/logger.js";
 import DailyLog from "../schemas/daily-log.schema.js";
+import Inventory from "../schemas/inventory.schema.js";
 import { AuthRequest, DailyLogItemCreate, DailyLogQueryParams, WaterIntakeUpdate, DailyLogSummary } from "../types/daily-log.types.js";
+
+// Helper function to check and update inventory
+const checkAndUpdateInventory = async (userId: string, itemName: string, quantity: number, category: string) => {
+  try {
+    // Find inventory item by name and category (case-insensitive)
+    const inventoryItem = await Inventory.findOne({
+      userId: userId,
+      itemName: { $regex: `^${itemName}$`, $options: 'i' },
+      category: { $regex: `^${category}$`, $options: 'i' }
+    });
+
+    if (!inventoryItem) {
+      return {
+        success: false,
+        message: `Item "${itemName}" not found in your inventory`,
+        inventoryStatus: 'not_found'
+      };
+    }
+
+    // Check if enough quantity is available
+    if (inventoryItem.quantity < quantity) {
+      return {
+        success: false,
+        message: `Insufficient quantity. You have ${inventoryItem.quantity} ${inventoryItem.itemName}(s) but tried to consume ${quantity}`,
+        inventoryStatus: 'insufficient',
+        currentQuantity: inventoryItem.quantity
+      };
+    }
+
+    // Reduce inventory quantity
+    const newQuantity = inventoryItem.quantity - quantity;
+    await Inventory.findByIdAndUpdate(
+      inventoryItem._id,
+      { $set: { quantity: newQuantity } }
+    );
+
+    return {
+      success: true,
+      message: `Successfully reduced ${quantity} ${itemName}(s) from inventory`,
+      inventoryStatus: 'updated',
+      previousQuantity: inventoryItem.quantity,
+      newQuantity: newQuantity
+    };
+
+  } catch (error) {
+    logger.error(`Inventory check error: ${(error as Error).message}`);
+    return {
+      success: false,
+      message: "Error checking inventory",
+      inventoryStatus: 'error'
+    };
+  }
+};
 
 // Get or create daily log for a specific date
 export const getDailyLog = async (req: AuthRequest, res: Response) => {
@@ -158,7 +212,11 @@ export const addDailyLogItem = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const { date, item } = req.body as { date?: string; item: DailyLogItemCreate };
+    const { date, item, skipInventoryCheck = false } = req.body as {
+      date?: string;
+      item: DailyLogItemCreate;
+      skipInventoryCheck?: boolean;
+    };
 
     if (!item) {
       return res.status(400).json({
@@ -193,6 +251,27 @@ export const addDailyLogItem = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    // Check and update inventory (unless explicitly skipped)
+    let inventoryResult = null;
+    if (!skipInventoryCheck) {
+      inventoryResult = await checkAndUpdateInventory(
+        req.user.userId,
+        item.itemName.trim(),
+        item.quantity,
+        item.category
+      );
+
+      // If inventory check failed, return the error
+      if (!inventoryResult.success) {
+        return res.status(400).json({
+          success: false,
+          message: inventoryResult.message,
+          inventoryStatus: inventoryResult.inventoryStatus,
+          currentQuantity: inventoryResult.currentQuantity || 0
+        });
+      }
+    }
+
     // Find or create daily log
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dailyLog = await (DailyLog as any).findOrCreate(req.user.userId, targetDate);
@@ -208,24 +287,37 @@ export const addDailyLogItem = async (req: AuthRequest, res: Response) => {
 
     logger.info(`Item added to daily log: ${item.itemName} for user ${req.user.username}`);
 
+    const responseData: any = {
+      _id: dailyLog._id,
+      userId: dailyLog.userId,
+      date: dailyLog.date.toISOString().split('T')[0],
+      items: dailyLog.items,
+      totalCalories: dailyLog.totalCalories,
+      totalProtein: dailyLog.totalProtein,
+      totalCarbs: dailyLog.totalCarbs,
+      totalFats: dailyLog.totalFats,
+      totalFiber: dailyLog.totalFiber,
+      totalSugar: dailyLog.totalSugar,
+      totalSodium: dailyLog.totalSodium,
+      waterIntake: dailyLog.waterIntake,
+      updatedAt: dailyLog.updatedAt
+    };
+
+    // Include inventory information if inventory was checked
+    if (inventoryResult) {
+      responseData.inventoryUpdate = {
+        success: inventoryResult.success,
+        message: inventoryResult.message,
+        previousQuantity: inventoryResult.previousQuantity,
+        newQuantity: inventoryResult.newQuantity,
+        inventoryStatus: inventoryResult.inventoryStatus
+      };
+    }
+
     res.status(201).json({
       success: true,
-      message: "Item added to daily log successfully",
-      data: {
-        _id: dailyLog._id,
-        userId: dailyLog.userId,
-        date: dailyLog.date.toISOString().split('T')[0],
-        items: dailyLog.items,
-        totalCalories: dailyLog.totalCalories,
-        totalProtein: dailyLog.totalProtein,
-        totalCarbs: dailyLog.totalCarbs,
-        totalFats: dailyLog.totalFats,
-        totalFiber: dailyLog.totalFiber,
-        totalSugar: dailyLog.totalSugar,
-        totalSodium: dailyLog.totalSodium,
-        waterIntake: dailyLog.waterIntake,
-        updatedAt: dailyLog.updatedAt
-      }
+      message: "Item added to daily log successfully" + (inventoryResult ? " and inventory updated" : ""),
+      data: responseData
     });
 
   } catch (error) {

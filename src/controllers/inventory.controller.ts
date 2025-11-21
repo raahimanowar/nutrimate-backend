@@ -75,6 +75,11 @@ export const validateInventoryItem = [
     .isBoolean()
     .withMessage('Has expiration must be a boolean'),
 
+  body('quantity')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('Quantity must be a non-negative integer'),
+
   body('expirationDate')
     .if(body('hasExpiration').equals('true'))
     .isISO8601()
@@ -107,7 +112,7 @@ export const addItem = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const { itemName, category, expirationDate, hasExpiration, costPerUnit } = req.body;
+    const { itemName, category, expirationDate, hasExpiration, costPerUnit, quantity = 1 } = req.body;
 
     const newItem = new Inventory({
       itemName: itemName.trim(),
@@ -115,6 +120,7 @@ export const addItem = async (req: AuthRequest, res: Response) => {
       expirationDate: hasExpiration && expirationDate ? new Date(expirationDate) : null,
       hasExpiration: hasExpiration !== undefined ? hasExpiration : true,
       costPerUnit,
+      quantity: Math.max(0, Number(quantity) || 1), // Ensure quantity is a positive number
       userId: req.user.userId
     });
 
