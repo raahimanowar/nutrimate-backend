@@ -17,6 +17,7 @@ import foodInventoryRoutes from "./routes/foodInventory.routes.js";
 import mealOptimizerRoutes from "./routes/mealOptimizer.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
 import expirationRiskRoutes from "./routes/expirationRisk.routes.js";
+import patternAnalyzerRoutes from "./routes/patternAnalyzer.routes.js";
 
 dotenv.config();
 
@@ -104,6 +105,7 @@ app.use("/api/food-inventory", foodInventoryRoutes);
 app.use("/api/meal-optimizer", mealOptimizerRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/expiration-risk", expirationRiskRoutes);
+app.use("/api/pattern-analyzer", patternAnalyzerRoutes);
 
 app.get("/api", (_req: Request, res: Response) => {
   res.json({
