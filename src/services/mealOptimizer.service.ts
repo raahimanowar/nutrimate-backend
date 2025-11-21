@@ -3,13 +3,11 @@ import { logger } from '../utils/logger.js';
 import FoodInventory from '../schemas/foodInventory.schema.js';
 import Inventory from '../schemas/inventory.schema.js';
 import { convertToBase, convertFromBase, formatQuantity } from '../utils/unitConverter.js';
-import localPriceSearchService from './localPriceSearch.service.js';
 
 interface UserProfile {
   budget: number;
   dietaryRestrictions?: string[];
   preferences?: string[];
-  familySize?: number;
   weeklyBudget?: boolean;
   userLocation?: string;
 }
@@ -26,21 +24,14 @@ interface FoodItem {
 
 interface LocalPriceInfo {
   itemName: string;
-  localPrice?: {
-    price: number;
-    store: string;
-    location: string;
-    savings: number; // amount saved compared to FoodInventory
-    isCheaper: boolean;
-  };
-  alternatives: Array<{
+  localAlternatives?: Array<{
     name: string;
     category: string;
-    price: number;
+    currentPrice: number;
     unit: string;
-    store: string;
-    savings: number;
+    priceType: string;
     nutritionalInfo: string;
+    savings: string;
   }>;
 }
 
@@ -154,7 +145,6 @@ interface OptimizationResult {
     remainingBudget: number;
     itemsRecommended: number;
     priorityCategories: string[];
-    localSavings?: number; // total potential savings from local alternatives
   };
   recommendations: ShoppingRecommendation[];
   insights: {
@@ -162,7 +152,6 @@ interface OptimizationResult {
     nutritionalFocus: string;
     costSavingTips: string[];
     mealPlanningSuggestions: string[];
-    localPriceInsights?: string; // insights about local price advantages
   };
   currentInventory: {
     totalItems: number;
@@ -194,20 +183,14 @@ class MealOptimizerService {
       // Step 3: Analyze gaps and opportunities
       const analysis = await this.analyzeNutritionalNeeds(userInventory, foodCatalog, userProfile);
 
-      // Step 4: Get AI-powered recommendations
+      // Step 4: Get AI-powered recommendations (includes local alternatives via AI)
       const aiRecommendations = await this.getAIRecommendations(analysis, userProfile, userInventory);
 
       // Step 5: Calculate budget allocation
       const optimizedRecommendations = this.optimizeForBudget(aiRecommendations, userProfile);
 
-      // Step 6: Compare with local prices and find alternatives
-      const recommendationsWithLocalPrices = await this.enhanceWithLocalPriceComparison(
-        optimizedRecommendations,
-        userProfile.userLocation
-      );
-
-      // Step 7: Generate final result
-      return this.generateOptimizationResult(recommendationsWithLocalPrices, userProfile, userInventory, foodCatalog);
+      // Step 6: Generate final result
+      return this.generateOptimizationResult(optimizedRecommendations, userProfile, userInventory, foodCatalog);
 
     } catch (error) {
       logger.error(`Meal optimization error: ${(error as Error).message}`);
@@ -295,16 +278,15 @@ class MealOptimizerService {
     // Check what categories need restocking
     const categoryNeeds = this.analyzeCategoryNeeds(userInventory, foodCatalog);
 
-    const familySize = userProfile.familySize || 1;
-    const analysisPrompt = `
+        const analysisPrompt = `
     User Profile Analysis:
     - Budget: $${totalBudget} (${userProfile.weeklyBudget ? 'monthly' : 'per shopping trip'})
-    - Family Size: ${familySize} people
+    - Family Size: 1 person
     - Dietary Restrictions: ${userProfile.dietaryRestrictions?.join(', ') || 'None'}
     - Current Inventory Value: $${inventoryValue.toFixed(2)}
 
-    NUTRITIONAL REQUIREMENTS FOR ${familySize} PERSON(S):
-    Daily Targets (multiply by ${familySize} for family):
+    NUTRITIONAL REQUIREMENTS FOR 1 PERSON:
+    Daily Targets (multiply by 1 for individual):
     - Calories: 2000 kcal (range: 1800-2200 kcal)
     - Carbohydrates: 225-325g
     - Protein: 75-125g (minimum: 60g)
@@ -399,17 +381,21 @@ class MealOptimizerService {
 
   private async getAIRecommendations(analysis: string, userProfile: UserProfile, userInventory: FoodItem[]): Promise<ShoppingRecommendation[]> {
     const totalBudget = userProfile.weeklyBudget ? userProfile.budget * 4 : userProfile.budget;
-    const familySize = userProfile.familySize || 1;
-
+    
     const prompt = `
-    You are a nutritionist and budget advisor who considers local price advantages. Based on this analysis, recommend specific food items to purchase:
+    You are a nutritionist and budget advisor. Based on this analysis, recommend specific food items to purchase:
 
     ${analysis}
 
-    LOCAL PRICE ADVISORY:
-    When recommending items, consider that local market prices may be more favorable for certain items.
-    Be flexible with brand and type recommendations to allow for better local deals.
-    Prioritize items that typically have good local availability and competitive pricing.
+    LOCAL COST RESEARCH:
+    Research current local market prices for each recommended item.
+    Find:
+    1. Typical current prices in local markets
+    2. Cheaper alternative options with similar nutritional value
+    3. Seasonal price variations
+    4. General bulk purchasing savings
+
+    Provide realistic current market prices and cost-effective alternatives.
 
     Please provide exactly 8-10 specific food recommendations in JSON format:
     {
@@ -425,7 +411,18 @@ class MealOptimizerService {
           "nutritionalValue": "key nutritional benefits",
           "urgency": "high/medium/low",
           "alternativeOptions": ["alternative 1", "alternative 2"],
-          "inventoryStatus": "not_in_inventory"
+          "inventoryStatus": "not_in_inventory",
+          "localAlternatives": [
+            {
+              "name": "alternative item name",
+              "category": "category",
+              "currentPrice": current local market price,
+              "unit": "unit",
+              "priceType": "store brand/seasonal/bulk/etc",
+              "nutritionalInfo": "why this is a good substitute",
+              "savings": "how much you save compared to original recommendation"
+            }
+          ]
         }
       ]
     }
@@ -468,7 +465,7 @@ class MealOptimizerService {
 
     Additional Guidelines:
     - Stay within the $${totalBudget} budget
-    - Consider family size of ${familySize} (multiply nutrition requirements by family size)
+    - Consider individual nutritional requirements
     - Account for dietary restrictions: ${userProfile.dietaryRestrictions?.join(', ') || 'None'}
     - Focus on cost-effective, nutrient-dense options
     - Include staple items and versatile ingredients that complement existing inventory
@@ -514,26 +511,34 @@ class MealOptimizerService {
       // Filter out recommendations that conflict with user's inventory
       const filteredRecommendations = aiResponse.recommendations.filter((rec: any) =>
         !this.isInInventory(userInventory, rec.name)
-      ).map((rec: any) => ({
-        item: {
-          name: rec.name,
-          category: rec.category,
-          quantity: rec.quantity,
-          unit: rec.unit,
-          costPerUnit: rec.costPerUnit,
-          totalCost: rec.totalCost,
-          reason: rec.reason,
-          nutritionalValue: rec.nutritionalValue,
-          alternativeOptions: rec.alternativeOptions || [],
-          inventoryStatus: 'not_in_inventory'
-        },
-        budgetImpact: {
-          cost: rec.totalCost,
-          remainingBudget: 0, // Will be calculated later
-          percentageUsed: 0    // Will be calculated later
-        },
-        urgency: rec.urgency || 'medium'
-      }));
+      ).map((rec: any) => {
+        const localPriceInfo: LocalPriceInfo = {
+          itemName: rec.name,
+          localAlternatives: rec.localAlternatives || []
+        };
+
+        return {
+          item: {
+            name: rec.name,
+            category: rec.category,
+            quantity: rec.quantity,
+            unit: rec.unit,
+            costPerUnit: rec.costPerUnit,
+            totalCost: rec.totalCost,
+            reason: rec.reason,
+            nutritionalValue: rec.nutritionalValue,
+            alternativeOptions: rec.alternativeOptions || [],
+            inventoryStatus: 'not_in_inventory'
+          },
+          budgetImpact: {
+            cost: rec.totalCost,
+            remainingBudget: 0, // Will be calculated later
+            percentageUsed: 0    // Will be calculated later
+          },
+          urgency: rec.urgency || 'medium',
+          localPriceInfo
+        };
+      });
 
       return filteredRecommendations;
 
@@ -663,69 +668,7 @@ class MealOptimizerService {
     return optimizedRecommendations;
   }
 
-  private async enhanceWithLocalPriceComparison(
-  recommendations: ShoppingRecommendation[],
-  userLocation?: string
-): Promise<ShoppingRecommendation[]> {
-    try {
-      const enhancedRecommendations = await Promise.all(
-        recommendations.map(async (rec) => {
-          try {
-            // Search for local prices
-            const localPriceResult = await localPriceSearchService.searchLocalPrices(
-              rec.item.name,
-              rec.item.costPerUnit,
-              userLocation
-            );
-
-            // Find alternatives if local price is cheaper or if no local price found
-            const alternatives = localPriceResult?.priceComparison.isCheaper ?
-              await localPriceSearchService.findCheaperAlternatives(
-                rec.item.category,
-                rec.item.costPerUnit,
-                userLocation
-              ) : [];
-
-            const localPriceInfo: LocalPriceInfo = {
-              itemName: rec.item.name,
-              localPrice: localPriceResult ? {
-                price: localPriceResult.localPrice,
-                store: localPriceResult.localStore,
-                location: localPriceResult.location,
-                savings: rec.item.costPerUnit - localPriceResult.localPrice,
-                isCheaper: localPriceResult.priceComparison.isCheaper
-              } : undefined,
-              alternatives: alternatives.map(alt => ({
-                name: alt.name,
-                category: alt.category,
-                price: alt.localPrice,
-                unit: alt.unit,
-                store: alt.store,
-                savings: alt.savings,
-                nutritionalInfo: alt.nutritionalInfo || 'Nutritious alternative'
-              }))
-            };
-
-            return {
-              ...rec,
-              localPriceInfo
-            };
-
-          } catch (error) {
-            logger.warn(`Local price comparison failed for ${rec.item.name}: ${(error as Error).message}`);
-            return rec; // Return original recommendation if local search fails
-          }
-        })
-      );
-
-      return enhancedRecommendations;
-
-    } catch (error) {
-      logger.error(`Local price enhancement error: ${(error as Error).message}`);
-      return recommendations; // Return original recommendations if enhancement fails
-    }
-  }
-
+  
   private generateOptimizationResult(
     recommendations: ShoppingRecommendation[],
     userProfile: UserProfile,
@@ -739,36 +682,20 @@ class MealOptimizerService {
     const inventoryCategories = this.groupInventoryByCategory(userInventory);
     const totalInventoryValue = userInventory.reduce((sum, item) => sum + (item.quantity * item.costPerUnit), 0);
 
-    // Calculate local savings
-    const localSavings = recommendations.reduce((total, rec) => {
-      if (rec.localPriceInfo?.localPrice?.isCheaper) {
-        return total + rec.localPriceInfo.localPrice.savings * rec.item.quantity;
-      }
-      return total;
-    }, 0);
-
-    // Count recommendations with local price advantages
-    const itemsWithLocalAdvantages = recommendations.filter(rec =>
-      rec.localPriceInfo?.localPrice?.isCheaper ||
-      (rec.localPriceInfo?.alternatives && rec.localPriceInfo.alternatives.length > 0)
-    ).length;
-
     return {
       summary: {
         totalBudget,
         allocatedBudget,
         remainingBudget,
         itemsRecommended: recommendations.length,
-        priorityCategories: this.getPriorityCategories(recommendations),
-        localSavings: localSavings > 0 ? localSavings : undefined
+        priorityCategories: this.getPriorityCategories(recommendations)
       },
       recommendations,
       insights: {
         budgetOptimization: this.generateBudgetInsights(allocatedBudget, totalBudget, recommendations),
         nutritionalFocus: this.generateNutritionalInsights(recommendations, inventoryCategories),
         costSavingTips: this.generateCostSavingTips(recommendations, userProfile),
-        mealPlanningSuggestions: this.generateMealPlanningSuggestions(recommendations, userInventory),
-        localPriceInsights: this.generateLocalPriceInsights(recommendations, itemsWithLocalAdvantages)
+        mealPlanningSuggestions: this.generateMealPlanningSuggestions(recommendations, userInventory)
       },
       currentInventory: {
         totalItems: userInventory.length,
@@ -847,10 +774,7 @@ class MealOptimizerService {
       'Store brands often offer same quality at 20-30% less cost'
     ];
 
-    if (userProfile.familySize && userProfile.familySize > 2) {
-      tips.push('Family packs offer better value for larger households');
-    }
-
+    
     const highUrgencyItems = recommendations.filter(r => r.urgency === 'high').length;
     if (highUrgencyItems > 3) {
       tips.push('Focus on high-priority items first, spread other purchases across multiple shopping trips');
@@ -881,41 +805,7 @@ class MealOptimizerService {
     return suggestions;
   }
 
-  private generateLocalPriceInsights(recommendations: ShoppingRecommendation[], itemsWithAdvantages: number): string {
-    if (itemsWithAdvantages === 0) {
-      return 'Current FoodInventory prices appear competitive with local market rates. Consider online shopping convenience benefits.';
-    }
-
-    const itemsWithCheaperLocal = recommendations.filter(rec =>
-      rec.localPriceInfo?.localPrice?.isCheaper
-    ).length;
-
-    const totalPotentialSavings = recommendations.reduce((total, rec) => {
-      if (rec.localPriceInfo?.localPrice?.isCheaper) {
-        return total + (rec.localPriceInfo.localPrice.savings * rec.item.quantity);
-      }
-      return total;
-    }, 0);
-
-    let insight = `${itemsWithAdvantages} of ${recommendations.length} recommended items have potential local savings advantages.`;
-
-    if (itemsWithCheaperLocal > 0) {
-      insight += ` ${itemsWithCheaperLocal} items are available at lower local prices, potentially saving you $${totalPotentialSavings.toFixed(2)}.`;
-    }
-
-    const itemsWithAlternatives = recommendations.filter(rec =>
-      rec.localPriceInfo?.alternatives && rec.localPriceInfo.alternatives.length > 0
-    ).length;
-
-    if (itemsWithAlternatives > 0) {
-      insight += ` ${itemsWithAlternatives} items have cheaper local alternatives available. Consider budget-friendly substitutes to maximize savings.`;
-    }
-
-    insight += ' Check local stores for seasonal promotions and bulk discounts to optimize your grocery budget further.';
-
-    return insight;
-  }
-
+  
   private async createWeeklyMealPlanAndShoppingList(
     recommendations: ShoppingRecommendation[],
     userInventory: FoodItem[],
@@ -951,12 +841,11 @@ class MealOptimizerService {
     userProfile: UserProfile
   ): Promise<WeeklyMealPlan> {
     try {
-      const familySize = userProfile.familySize || 1;
-      const dailyCalories = 2000 * familySize;
-      const dailyProtein = 75 * familySize;
-      const dailyCarbs = 275 * familySize;
-      const dailyFat = 62 * familySize;
-      const dailyFiber = 20 * familySize;
+            const dailyCalories = 2000;
+      const dailyProtein = 75;
+      const dailyCarbs = 275;
+      const dailyFat = 62;
+      const dailyFiber = 20;
 
       // Combine recommended items with user inventory for meal planning
       const availableFoods = [
@@ -964,15 +853,13 @@ class MealOptimizerService {
           name: rec.item.name,
           category: rec.item.category,
           costPerUnit: rec.item.costPerUnit,
-          isLocalAlternative: false,
-          localPrice: rec.localPriceInfo?.localPrice
+          isLocalAlternative: false
         })),
         ...userInventory.map(item => ({
           name: item.name,
           category: item.category,
           costPerUnit: item.costPerUnit,
-          isLocalAlternative: false,
-          localPrice: undefined
+          isLocalAlternative: false
         }))
       ];
 
@@ -982,7 +869,7 @@ class MealOptimizerService {
       AVAILABLE FOODS:
       ${availableFoods.map(food => `- ${food.name} (${food.category}) - $${food.costPerUnit.toFixed(2)}/unit`).join('\n')}
 
-      NUTRITIONAL REQUIREMENTS (Daily for ${familySize} person(s)):
+      NUTRITIONAL REQUIREMENTS (Daily for 1 person):
       - Calories: ${dailyCalories} kcal (range: ${Math.round(dailyCalories * 0.9)}-${Math.round(dailyCalories * 1.1)} kcal)
       - Protein: ${dailyProtein}g (minimum: ${Math.round(dailyProtein * 0.8)}g)
       - Carbohydrates: ${dailyCarbs}g (range: ${Math.round(dailyCarbs * 0.85)}-${Math.round(dailyCarbs * 1.15)}g)
@@ -995,7 +882,7 @@ class MealOptimizerService {
       - Include at least 2 different meal types per day
       - Each day must include: 1 fruit, 1 vegetable, 1 protein, 1 whole grain, 1 iron-rich, 1 calcium-rich item
       - Dietary restrictions: ${userProfile.dietaryRestrictions?.join(', ') || 'None'}
-      - Consider family size: ${familySize}
+      - Consider individual serving sizes
 
       Return JSON format:
       {
@@ -1096,59 +983,96 @@ class MealOptimizerService {
     } catch (error) {
       logger.error(`AI meal planning error: ${(error as Error).message}`);
       // Return fallback meal plan
-      return this.getFallbackMealPlan(recommendations, familySize);
+      return this.getFallbackMealPlan(recommendations);
     }
   }
 
-  private async generateShoppingList(
+  private generateShoppingList(
     weeklyMealPlan: WeeklyMealPlan,
     recommendations: ShoppingRecommendation[],
     userInventory: FoodItem[]
-  ): Promise<ShoppingList> {
+  ): ShoppingList {
     try {
-      // Calculate total quantities needed from meal plan
-      const ingredientQuantities = new Map<string, {
-        category: string;
-        totalQuantity: number;
-        unit: string;
-        estimatedCost: number;
-        source: 'food_inventory' | 'local_alternative' | 'user_inventory';
-      }>();
+      // Section mapping for store organization
+      const sectionMapping: Record<string, string> = {
+        'protein': 'Meat & Seafood',
+        'vegetables': 'Fresh Produce',
+        'fruits': 'Fresh Produce',
+        'grains': 'Grains & Pasta',
+        'dairy': 'Dairy & Eggs',
+        'beverages': 'Beverages',
+        'snacks': 'Snacks & Pantry'
+      };
 
-      // Aggregate all ingredients from the meal plan
-      weeklyMealPlan.weeklyPlan.forEach(day => {
-        [day.breakfast, day.lunch, day.dinner].flat().forEach(meal => {
-          const existing = ingredientQuantities.get(meal.name) || {
-            category: meal.category,
-            totalQuantity: 0,
-            unit: meal.unit,
-            estimatedCost: 0,
-            source: 'food_inventory' as const
+      const recommendedSections = new Map<string, any[]>();
+      const alternativeSections = new Map<string, any[]>();
+      let totalCost = 0;
+
+      // Process recommended items
+      recommendations.forEach(rec => {
+        const sectionName = sectionMapping[rec.item.category] || 'Other';
+
+        // Check if item is in inventory
+        const hasInInventory = userInventory.some(inv =>
+          inv.name.toLowerCase() === rec.item.name.toLowerCase()
+        );
+
+        if (!hasInInventory) {
+          const recommendedItem = {
+            name: rec.item.name,
+            category: rec.item.category,
+            quantityNeeded: rec.item.quantity,
+            unit: rec.item.unit,
+            estimatedCost: rec.item.totalCost,
+            source: 'food_inventory' as const,
+            notes: rec.item.reason
           };
 
-          existing.totalQuantity += meal.quantity;
-          existing.estimatedCost += meal.cost;
-          ingredientQuantities.set(meal.name, existing);
-        });
+          const section = recommendedSections.get(sectionName) || [];
+          section.push(recommendedItem);
+          recommendedSections.set(sectionName, section);
+          totalCost += rec.item.totalCost;
+
+          // Add local alternatives if available
+          if (rec.localPriceInfo?.localAlternatives) {
+            rec.localPriceInfo.localAlternatives.forEach(alt => {
+              const altSection = alternativeSections.get(sectionName) || [];
+              altSection.push({
+                name: alt.name,
+                category: alt.category,
+                quantityNeeded: rec.item.quantity,
+                unit: alt.unit,
+                estimatedCost: alt.currentPrice * rec.item.quantity,
+                source: 'local_alternative' as const,
+                notes: `${alt.savings}. ${alt.nutritionalInfo}. Type: ${alt.priceType}`
+              });
+              alternativeSections.set(sectionName, altSection);
+            });
+          }
+        }
       });
 
-      // Check what's already in user inventory
-      const inventoryMap = new Map(userInventory.map(item => [item.name.toLowerCase(), item]));
+      // Format sections
+      const formatSections = (sections: Map<string, any[]>): ShoppingListSection[] => {
+        return Array.from(sections.entries()).map(([section, items]) => ({
+          section,
+          items,
+          totalCost: items.reduce((sum, item) => sum + item.estimatedCost, 0)
+        })).sort((a, b) => a.section.localeCompare(b.section));
+      };
 
-      // Check what's available from recommendations and local alternatives
-      const recommendationMap = new Map(recommendations.map(rec => [rec.item.name.toLowerCase(), rec]));
-
-      // Separate items into store sections and calculate final costs
-      const storeSections = this.organizeByStoreSections(ingredientQuantities, inventoryMap, recommendationMap);
-
-      // Generate shopping notes
-      const shoppingNotes = this.generateShoppingNotes(weeklyMealPlan, userInventory);
+      const shoppingNotes = [
+        'Shop with a list to avoid impulse purchases',
+        'Check expiration dates and plan accordingly',
+        'Consider buying in bulk for non-perishable items to save money',
+        `Weekly meal plan estimated cost: $${weeklyMealPlan.weeklyCost.toFixed(2)}`
+      ];
 
       return {
-        recommendedItems: storeSections.recommended,
-        alternativeItems: storeSections.alternatives,
-        totalEstimatedCost: storeSections.totalCost,
-        totalPotentialSavings: storeSections.totalSavings,
+        recommendedItems: formatSections(recommendedSections),
+        alternativeItems: formatSections(alternativeSections),
+        totalEstimatedCost: totalCost,
+        totalPotentialSavings: 0, // Simplified - no complex calculation
         shoppingNotes
       };
 
@@ -1158,161 +1082,32 @@ class MealOptimizerService {
     }
   }
 
-  private organizeByStoreSections(
-    ingredientQuantities: Map<string, any>,
-    inventoryMap: Map<string, FoodItem>,
-    recommendationMap: Map<string, ShoppingRecommendation>
-  ): { recommended: ShoppingListSection[], alternatives: ShoppingListSection[], totalCost: number, totalSavings: number } {
-    const sectionMapping: Record<string, string> = {
-      'protein': 'Meat & Seafood',
-      'vegetables': 'Fresh Produce',
-      'fruits': 'Fresh Produce',
-      'grains': 'Grains & Pasta',
-      'dairy': 'Dairy & Eggs',
-      'beverages': 'Beverages',
-      'snacks': 'Snacks & Pantry'
-    };
-
-    const recommendedSections = new Map<string, any[]>();
-    const alternativeSections = new Map<string, any[]>();
-    let totalCost = 0;
-    let totalSavings = 0;
-
-    // Process each ingredient
-    ingredientQuantities.forEach((ingredient, ingredientName) => {
-      const sectionName = sectionMapping[ingredient.category] || 'Other';
-      const lowerName = ingredientName.toLowerCase();
-
-      // Check if in inventory
-      const inventoryItem = inventoryMap.get(lowerName);
-      const recommendation = recommendationMap.get(lowerName);
-
-      if (inventoryItem && inventoryItem.quantity >= ingredient.totalQuantity) {
-        // Already have enough in inventory
-        return;
-      }
-
-      let shopItem = {
-        name: ingredientName,
-        category: ingredient.category,
-        quantityNeeded: ingredient.totalQuantity,
-        unit: ingredient.unit,
-        estimatedCost: ingredient.estimatedCost,
-        source: 'food_inventory' as const,
-        notes: ''
-      };
-
-      // Determine best source and calculate savings
-      if (recommendation?.localPriceInfo?.localPrice?.isCheaper) {
-        const localPrice = recommendation.localPriceInfo.localPrice;
-        const foodInventoryCost = recommendation.item.costPerUnit * ingredient.totalQuantity;
-        const localCost = localPrice.price * ingredient.totalQuantity;
-
-        shopItem.estimatedCost = localCost;
-        shopItem.source = 'local_alternative';
-        shopItem.notes = `Available at ${localPrice.store} for $${localPrice.price.toFixed(2)}/${localPrice.unit}`;
-        totalSavings += foodInventoryCost - localCost;
-      } else if (recommendation?.localPriceInfo?.alternatives?.length > 0) {
-        // Add alternative suggestion
-        const bestAlternative = recommendation.localPriceInfo.alternatives[0];
-        const altShopItem = {
-          name: bestAlternative.name,
-          category: bestAlternative.category,
-          quantityNeeded: ingredient.totalQuantity,
-          unit: bestAlternative.unit,
-          estimatedCost: bestAlternative.price * ingredient.totalQuantity,
-          source: 'local_alternative' as const,
-          notes: `${bestAlternative.nutritionalInfo}. Available at ${bestAlternative.store}`
-        };
-
-        const section = alternativeSections.get(sectionName) || [];
-        section.push(altShopItem);
-        alternativeSections.set(sectionName, section);
-        totalSavings += ingredient.estimatedCost - altShopItem.estimatedCost;
-      }
-
-      const section = recommendedSections.get(sectionName) || [];
-      section.push(shopItem);
-      recommendedSections.set(sectionName, section);
-      totalCost += shopItem.estimatedCost;
-    });
-
-    // Convert to final format
-    const formatSections = (sections: Map<string, any[]>): ShoppingListSection[] => {
-      return Array.from(sections.entries()).map(([section, items]) => ({
-        section,
-        items,
-        totalCost: items.reduce((sum, item) => sum + item.estimatedCost, 0)
-      })).sort((a, b) => a.section.localeCompare(b.section));
-    };
-
-    return {
-      recommended: formatSections(recommendedSections),
-      alternatives: formatSections(alternativeSections),
-      totalCost,
-      totalSavings
-    };
-  }
-
-  private generateShoppingNotes(weeklyMealPlan: WeeklyMealPlan, userInventory: FoodItem[]): string[] {
-    const notes = [
-      'Shop with a list to avoid impulse purchases',
-      'Check expiration dates and plan accordingly',
-      'Consider buying in bulk for non-perishable items to save money'
-    ];
-
-    // Add meal-specific tips
-    if (weeklyMealPlan.weeklyCost > 0) {
-      notes.push(`Weekly meal plan estimated cost: $${weeklyMealPlan.weeklyCost.toFixed(2)}`);
-    }
-
-    // Add inventory-based tips
-    const inventoryValue = userInventory.reduce((sum, item) => sum + (item.quantity * item.costPerUnit), 0);
-    if (inventoryValue > 50) {
-      notes.push(`You have $${inventoryValue.toFixed(2)} worth of food in inventory - use items nearing expiration first`);
-    }
-
-    // Add nutritional compliance tips
-    const dailyAvg = weeklyMealPlan.weeklyNutrition.dailyAverages;
-    if (dailyAvg.calories >= 1800 && dailyAvg.calories <= 2200) {
-      notes.push('Meal plan meets daily calorie targets');
-    }
-
-    if (dailyAvg.protein >= 60) {
-      notes.push('Adequate protein intake planned for muscle maintenance');
-    }
-
-    return notes;
-  }
-
+  
+  
   private generateMealPlanInsights(
     weeklyMealPlan: WeeklyMealPlan,
     shoppingList: ShoppingList,
     userProfile: UserProfile
   ): MealPlanResult['insights'] {
     const dailyAvg = weeklyMealPlan.weeklyNutrition.dailyAverages;
-    const familySize = userProfile.familySize || 1;
-
+    
     // Check nutritional compliance
     let nutritionalCompliance = '';
-    if (dailyAvg.calories >= 1800 * familySize && dailyAvg.calories <= 2200 * familySize) {
+    if (dailyAvg.calories >= 1800 && dailyAvg.calories <= 2200) {
       nutritionalCompliance = '✅ Meal plan meets daily calorie requirements';
     } else {
-      nutritionalCompliance = `⚠️ Daily calories (${dailyAvg.calories}) outside ideal range (${1800 * familySize}-${2200 * familySize})`;
+      nutritionalCompliance = `⚠️ Daily calories (${dailyAvg.calories}) outside ideal range (1800-2200)`;
     }
 
-    if (dailyAvg.protein >= 60 * familySize) {
+    if (dailyAvg.protein >= 60) {
       nutritionalCompliance += '\n✅ Adequate protein for nutritional needs';
     }
-    if (dailyAvg.fiber >= 20 * familySize) {
+    if (dailyAvg.fiber >= 20) {
       nutritionalCompliance += '\n✅ Meets fiber requirements for digestive health';
     }
 
     // Budget efficiency
     const budgetEfficiency = `Weekly meal cost: $${weeklyMealPlan.weeklyCost.toFixed(2)} ($${(weeklyMealPlan.weeklyCost / 7).toFixed(2)} per day)`;
-    if (shoppingList.totalPotentialSavings > 0) {
-      budgetEfficiency += `\n💰 Save $${shoppingList.totalPotentialSavings.toFixed(2)} by choosing local alternatives`;
-    }
 
     // Meal prep tips
     const mealPrepTips = [
@@ -1322,10 +1117,7 @@ class MealOptimizerService {
       'Store prepped ingredients in airtight containers'
     ];
 
-    if (familySize > 2) {
-      mealPrepTips.push('Consider doubling recipes for larger families');
-    }
-
+    
     // Shopping tips
     const shoppingTips = [
       'Shop perimeter of store first for fresh items',
@@ -1342,18 +1134,17 @@ class MealOptimizerService {
     };
   }
 
-  private getFallbackMealPlan(recommendations: ShoppingRecommendation[], familySize: number): WeeklyMealPlan {
+  private getFallbackMealPlan(recommendations: ShoppingRecommendation[]): WeeklyMealPlan {
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const weeklyPlan: DailyMealPlan[] = [];
 
     // Create simple meal plan using recommended items
     const baseMeal = {
-      calories: 400 * familySize,
-      protein: 25 * familySize,
-      carbs: 50 * familySize,
-      fat: 15 * familySize,
-      fiber: 8 * familySize
-    };
+      calories: 400 ,
+      protein: 25 ,
+      carbs: 50 ,
+      fat: 15 ,
+      fiber: 8     };
 
     days.forEach(day => {
       const dailyPlan: DailyMealPlan = {
@@ -1361,40 +1152,40 @@ class MealOptimizerService {
         breakfast: [{
           name: 'Oatmeal with fruits',
           category: 'grains',
-          quantity: 1 * familySize,
+          quantity: 1 ,
           unit: 'bowl',
           calories: baseMeal.calories,
           protein: baseMeal.protein,
           carbs: baseMeal.carbs,
           fat: baseMeal.fat,
           fiber: baseMeal.fiber,
-          cost: 2.50 * familySize,
+          cost: 2.50 ,
           preparationNotes: 'Cook oats with water/milk, add fresh fruits'
         }],
         lunch: [{
           name: 'Chicken salad',
           category: 'protein',
-          quantity: 1 * familySize,
+          quantity: 1 ,
           unit: 'serving',
           calories: baseMeal.calories,
           protein: baseMeal.protein,
           carbs: baseMeal.carbs,
           fat: baseMeal.fat,
           fiber: baseMeal.fiber,
-          cost: 5.00 * familySize,
+          cost: 5.00 ,
           preparationNotes: 'Grilled chicken with mixed vegetables'
         }],
         dinner: [{
           name: 'Rice with vegetables',
           category: 'grains',
-          quantity: 1 * familySize,
+          quantity: 1 ,
           unit: 'plate',
           calories: baseMeal.calories,
           protein: baseMeal.protein,
           carbs: baseMeal.carbs,
           fat: baseMeal.fat,
           fiber: baseMeal.fiber,
-          cost: 4.00 * familySize,
+          cost: 4.00 ,
           preparationNotes: 'Brown rice with steamed vegetables'
         }],
         totalNutrition: {
@@ -1404,8 +1195,7 @@ class MealOptimizerService {
           fat: baseMeal.fat * 3,
           fiber: baseMeal.fiber * 3
         },
-        totalCost: 11.50 * familySize
-      };
+        totalCost: 11.50       };
       weeklyPlan.push(dailyPlan);
     });
 
