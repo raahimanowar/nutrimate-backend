@@ -16,6 +16,7 @@ import foodImageRoutes from "./routes/food-image.routes.js";
 import foodInventoryRoutes from "./routes/foodInventory.routes.js";
 import mealOptimizerRoutes from "./routes/mealOptimizer.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
+import extractText from "./routes/extractText.routes.js";
 
 dotenv.config();
 
@@ -102,6 +103,7 @@ app.use("/api/food-images", foodImageRoutes);
 app.use("/api/food-inventory", foodInventoryRoutes);
 app.use("/api/meal-optimizer", mealOptimizerRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/extractText", extractText);
 
 app.get("/api", (_req: Request, res: Response) => {
   res.json({
