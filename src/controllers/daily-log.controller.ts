@@ -3,9 +3,16 @@ import { logger } from "../utils/logger.js";
 import DailyLog from "../schemas/daily-log.schema.js";
 import Inventory from "../schemas/inventory.schema.js";
 import { AuthRequest, DailyLogItemCreate, DailyLogQueryParams, WaterIntakeUpdate, DailyLogSummary } from "../types/daily-log.types.js";
+import { convertToBase, convertFromBase, areUnitsCompatible, formatQuantity } from "../utils/unitConverter.js";
 
-// Helper function to check and update inventory
-const checkAndUpdateInventory = async (userId: string, itemName: string, quantity: number, category: string) => {
+// Helper function to check and update inventory with unit conversion
+const checkAndUpdateInventory = async (
+  userId: string,
+  itemName: string,
+  quantity: number,
+  category: string,
+  unit: string = 'pieces'
+) => {
   try {
     // Find inventory item by name and category (case-insensitive)
     const inventoryItem = await Inventory.findOne({
@@ -22,29 +29,67 @@ const checkAndUpdateInventory = async (userId: string, itemName: string, quantit
       };
     }
 
-    // Check if enough quantity is available
-    if (inventoryItem.quantity < quantity) {
+    // Check if units are compatible
+    if (!areUnitsCompatible(unit, inventoryItem.unit)) {
       return {
         success: false,
-        message: `Insufficient quantity. You have ${inventoryItem.quantity} ${inventoryItem.itemName}(s) but tried to consume ${quantity}`,
-        inventoryStatus: 'insufficient',
-        currentQuantity: inventoryItem.quantity
+        message: `Unit mismatch. Inventory uses "${inventoryItem.unit}" but you tried to consume in "${unit}"`,
+        inventoryStatus: 'unit_mismatch',
+        inventoryUnit: inventoryItem.unit,
+        requestedUnit: unit
       };
     }
 
-    // Reduce inventory quantity
-    const newQuantity = inventoryItem.quantity - quantity;
+    // Convert consumed quantity to base unit for comparison
+    const consumedBaseQuantity = convertToBase(quantity, unit);
+    const availableBaseQuantity = inventoryItem.baseQuantity;
+
+    // Check if enough quantity is available
+    if (availableBaseQuantity < consumedBaseQuantity) {
+      // Convert available quantity back to requested unit for display
+      const availableInRequestedUnit = convertFromBase(availableBaseQuantity, unit);
+      const formattedAvailable = formatQuantity(availableInRequestedUnit, unit);
+      const formattedRequested = formatQuantity(quantity, unit);
+
+      return {
+        success: false,
+        message: `Insufficient quantity. You have ${formattedAvailable} of ${inventoryItem.itemName} but tried to consume ${formattedRequested}`,
+        inventoryStatus: 'insufficient',
+        currentQuantity: inventoryItem.baseQuantity,
+        currentQuantityDisplay: formatQuantity(convertFromBase(inventoryItem.baseQuantity, inventoryItem.unit), inventoryItem.unit),
+        requestedUnit: unit,
+        inventoryUnit: inventoryItem.unit
+      };
+    }
+
+    // Reduce inventory base quantity
+    const newBaseQuantity = availableBaseQuantity - consumedBaseQuantity;
+    const newDisplayQuantity = convertFromBase(newBaseQuantity, inventoryItem.unit);
+
     await Inventory.findByIdAndUpdate(
       inventoryItem._id,
-      { $set: { quantity: newQuantity } }
+      {
+        $set: {
+          baseQuantity: newBaseQuantity,
+          quantity: newDisplayQuantity
+        }
+      }
     );
+
+    const formattedPrevious = formatQuantity(convertFromBase(availableBaseQuantity, inventoryItem.unit), inventoryItem.unit);
+    const formattedNew = formatQuantity(newDisplayQuantity, inventoryItem.unit);
+    const formattedConsumed = formatQuantity(quantity, unit);
 
     return {
       success: true,
-      message: `Successfully reduced ${quantity} ${itemName}(s) from inventory`,
+      message: `Successfully consumed ${formattedConsumed} of ${itemName}. Remaining: ${formattedNew}`,
       inventoryStatus: 'updated',
-      previousQuantity: inventoryItem.quantity,
-      newQuantity: newQuantity
+      previousBaseQuantity: availableBaseQuantity,
+      newBaseQuantity: newBaseQuantity,
+      previousQuantity: formattedPrevious,
+      newQuantity: formattedNew,
+      consumedQuantity: formattedConsumed,
+      unit: inventoryItem.unit
     };
 
   } catch (error) {
@@ -258,17 +303,29 @@ export const addDailyLogItem = async (req: AuthRequest, res: Response) => {
         req.user.userId,
         item.itemName.trim(),
         item.quantity,
-        item.category
+        item.category,
+        item.unit || 'pieces'
       );
 
       // If inventory check failed, return the error
       if (!inventoryResult.success) {
-        return res.status(400).json({
+        const errorResponse: any = {
           success: false,
           message: inventoryResult.message,
-          inventoryStatus: inventoryResult.inventoryStatus,
-          currentQuantity: inventoryResult.currentQuantity || 0
-        });
+          inventoryStatus: inventoryResult.inventoryStatus
+        };
+
+        // Add specific error details based on status
+        if (inventoryResult.inventoryStatus === 'insufficient') {
+          errorResponse.currentQuantity = inventoryResult.currentQuantityDisplay;
+          errorResponse.requestedUnit = inventoryResult.requestedUnit;
+          errorResponse.inventoryUnit = inventoryResult.inventoryUnit;
+        } else if (inventoryResult.inventoryStatus === 'unit_mismatch') {
+          errorResponse.requestedUnit = inventoryResult.requestedUnit;
+          errorResponse.inventoryUnit = inventoryResult.inventoryUnit;
+        }
+
+        return res.status(400).json(errorResponse);
       }
     }
 
@@ -276,11 +333,11 @@ export const addDailyLogItem = async (req: AuthRequest, res: Response) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dailyLog = await (DailyLog as any).findOrCreate(req.user.userId, targetDate);
 
-    // Add item to log
+    // Add item to log with proper unit information
     dailyLog.items.push({
       ...item,
       itemName: item.itemName.trim(),
-      unit: item.unit || 'servings'
+      unit: item.unit || 'pieces'
     });
 
     await dailyLog.save();
@@ -310,7 +367,11 @@ export const addDailyLogItem = async (req: AuthRequest, res: Response) => {
         message: inventoryResult.message,
         previousQuantity: inventoryResult.previousQuantity,
         newQuantity: inventoryResult.newQuantity,
-        inventoryStatus: inventoryResult.inventoryStatus
+        consumedQuantity: inventoryResult.consumedQuantity,
+        unit: inventoryResult.unit,
+        inventoryStatus: inventoryResult.inventoryStatus,
+        previousBaseQuantity: inventoryResult.previousBaseQuantity,
+        newBaseQuantity: inventoryResult.newBaseQuantity
       };
     }
 
