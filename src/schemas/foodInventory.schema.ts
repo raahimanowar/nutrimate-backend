@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const FoodInventorySchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
-    category: { type: String, required: true }, // e.g., Dairy, Fruit, Grain
+    category: { type: String, required: true },
     expirationDays: { type: Number, required: true },
     costPerUnit: { type: Number, required: true },
     quantity: { type: Number, default: 0 },
