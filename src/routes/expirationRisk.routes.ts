@@ -28,10 +28,10 @@ router.get("/predictions", getExpirationRiskPredictions);
 router.get("/high-risk", getHighRiskItems);
 
 /**
- * @route   GET /api/expiration-risk/seasonal-alerts
+ * @route   GET /api/expiration-risk/sefejfeijfiefijefj jfjasonal-alerts
  * @desc    Get seasonal alerts and weather-related expiration risks
  * @access  Private
- * @returns Season-specific warnings and recommendations based on user location
+ * @returns Season-specific warnings anhjfejed recommendations based on user location
  */
 router.get("/seasonal-alerts", getSeasonalAlerts);
 
