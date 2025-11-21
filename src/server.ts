@@ -19,6 +19,7 @@ import chatRoutes from "./routes/chat.routes.js";
 import extractText from "./routes/extractText.routes.js";
 import expirationRiskRoutes from "./routes/expirationRisk.routes.js";
 import patternAnalyzerRoutes from "./routes/patternAnalyzer.routes.js";
+import wasteRoutes from "./routes/waste.routes.js";
 
 dotenv.config();
 
@@ -108,6 +109,8 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/extractText", extractText);
 app.use("/api/expiration-risk", expirationRiskRoutes);
 app.use("/api/pattern-analyzer", patternAnalyzerRoutes);
+app.use("/api/pattern-analyzer", patternAnalyzerRoutes);
+app.use("/api/waste", wasteRoutes);
 
 app.get("/api", (_req: Request, res: Response) => {
   res.json({
