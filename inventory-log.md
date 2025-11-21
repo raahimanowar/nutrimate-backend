@@ -1,8 +1,8 @@
-# NutriMate API Documentation - Inventory & Daily Log Integration
+# NutriMate API Documentation - Inventory & Daily Log
 
 ## Overview
 
-This documentation covers the integrated inventory and daily log system. When users log food consumption, the system automatically checks their inventory and reduces quantities accordingly.
+This documentation covers the integrated inventory and daily log system. Users can track food consumption with automatic inventory management, unit conversions, and real-time quantity tracking.
 
 ## Base URL
 ```
@@ -307,6 +307,223 @@ GET /inventory?category=fruits,vegetables&search=apple&sort_by=quantity&sort_ord
     "totalFats": 65,
     "waterIntake": 8
   }
+}
+```
+
+---
+
+## 🤖 AI Meal Optimizer
+
+The AI Meal Optimizer uses Groq AI to analyze user budget, current inventory, and food catalog to provide personalized shopping recommendations.
+
+### Get AI-Powered Meal Optimization
+
+**Endpoint:** `POST /meal-optimizer/optimize`
+
+**Description:** Get personalized food shopping recommendations based on budget and dietary preferences using AI analysis.
+
+**Request Body:**
+```json
+{
+  "budget": 200, // Monthly or per-shopping budget
+  "familySize": 3, // Optional, defaults to 1
+  "weeklyBudget": false, // Optional, true if budget is weekly
+  "dietaryRestrictions": ["vegetarian", "gluten-free"], // Optional
+  "preferences": ["organic", "local"] // Optional
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Meal optimization completed successfully",
+  "data": {
+    "summary": {
+      "totalBudget": 200,
+      "allocatedBudget": 185.50,
+      "remainingBudget": 14.50,
+      "itemsRecommended": 8,
+      "priorityCategories": ["protein", "vegetables", "grains"]
+    },
+    "recommendations": [
+      {
+        "item": {
+          "name": "Chicken Breast",
+          "category": "protein",
+          "quantity": 2,
+          "unit": "kg",
+          "costPerUnit": 6.00,
+          "totalCost": 12.00,
+          "reason": "High-quality lean protein, versatile for multiple meals",
+          "nutritionalValue": "High protein, low fat",
+          "alternativeOptions": ["Turkey breast", "Tofu"]
+        },
+        "budgetImpact": {
+          "cost": 12.00,
+          "remainingBudget": 188.00,
+          "percentageUsed": 6.0
+        },
+        "urgency": "high"
+      }
+    ],
+    "insights": {
+      "budgetOptimization": "You're utilizing 92.8% of your $200 budget...",
+      "nutritionalFocus": "Your shopping plan focuses on protein, vegetables, grains...",
+      "costSavingTips": [
+        "Buy in bulk for non-perishable items to save 15-30%",
+        "Consider seasonal produce for better prices and freshness"
+      ],
+      "mealPlanningSuggestions": [
+        "Plan 3-4 days worth of meals to reduce food waste",
+        "Prep ingredients in batches for efficient cooking"
+      ]
+    },
+    "currentInventory": {
+      "totalItems": 12,
+      "totalValue": 45.30,
+      "categories": {
+        "protein": 3,
+        "vegetables": 4,
+        "grains": 2,
+        "dairy": 2,
+        "fruits": 1
+      }
+    }
+  }
+}
+```
+
+### Get Budget Analysis
+
+**Endpoint:** `POST /meal-optimizer/budget-analysis`
+
+**Description:** Get quick budget analysis without AI (faster response).
+
+**Request Body:**
+```json
+{
+  "budget": 150,
+  "familySize": 2,
+  "weeklyBudget": true
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Budget analysis completed",
+  "data": {
+    "budget": {
+      "total": 600, // Monthly budget
+      "weekly": 150,
+      "allocated": 0,
+      "remaining": 600
+    },
+    "currentInventory": {
+      "totalItems": 8,
+      "totalValue": 85.20,
+      "categories": {
+        "protein": 2,
+        "vegetables": 3,
+        "grains": 2,
+        "fruits": 1
+      }
+    },
+    "availableOptions": {
+      "totalItems": 50,
+      "averageCost": 4.25,
+      "categories": {
+        "fruits": 8,
+        "vegetables": 12,
+        "protein": 10,
+        "grains": 8,
+        "dairy": 6,
+        "beverages": 4,
+        "snacks": 2
+      }
+    },
+    "recommendations": {
+      "budgetUtilization": "Your current inventory represents 14.2% of your budget",
+      "suggestedAllocation": {
+        "proteins": 210,
+        "grains": 150,
+        "vegetables": 120,
+        "fruits": 60,
+        "dairy": 30,
+        "other": 30
+      }
+    }
+  }
+}
+```
+
+### Get Nutritional Recommendations
+
+**Endpoint:** `GET /meal-optimizer/recommendations`
+
+**Description:** Get simple nutritional recommendations based on food catalog.
+
+**Query Parameters:**
+- `categories` (optional): Filter by categories (comma-separated)
+- `budget` (optional): Maximum budget for recommendations
+
+**Example Request:**
+```
+GET /meal-optimizer/recommendations?categories=protein,vegetables&budget=50
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Nutritional recommendations generated",
+  "data": {
+    "recommendations": [
+      {
+        "name": "Chicken",
+        "category": "fruit",
+        "costPerUnit": 0.50,
+        "expirationDays": 7,
+        "nutritionalScore": 9
+      }
+    ],
+    "summary": {
+      "totalItems": 15,
+      "totalCost": 42.50,
+      "averageCost": 2.83,
+      "categories": ["protein", "vegetables"]
+    }
+  }
+}
+```
+
+### AI Model Details
+
+- **Provider:** Groq AI
+- **Model:** `openai/gpt-oss-20b`
+- **Features:** Advanced reasoning, nutritional analysis, budget optimization
+- **Response Time:** 3-8 seconds for full optimization
+- **Fallback:** Basic recommendations if AI service is unavailable
+
+### Error Handling
+
+#### AI Service Unavailable (503)
+```json
+{
+  "success": false,
+  "message": "AI service temporarily unavailable. Please try again later.",
+  "error": "AI_SERVICE_ERROR"
+}
+```
+
+#### Invalid Budget (400)
+```json
+{
+  "success": false,
+  "message": "Invalid budget configuration provided.",
+  "error": "INVALID_BUDGET"
 }
 ```
 
