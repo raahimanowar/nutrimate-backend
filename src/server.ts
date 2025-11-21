@@ -21,6 +21,7 @@ import expirationRiskRoutes from "./routes/expirationRisk.routes.js";
 import patternAnalyzerRoutes from "./routes/patternAnalyzer.routes.js";
 import wasteRoutes from "./routes/waste.routes.js";
 import nutrientGapRoutes from "./routes/nutrientGap.routes.js";
+import sdgImpactRoutes from "./routes/sdgImpact.routes.js";
 
 dotenv.config();
 
@@ -113,6 +114,7 @@ app.use("/api/pattern-analyzer", patternAnalyzerRoutes);
 app.use("/api/pattern-analyzer", patternAnalyzerRoutes);
 app.use("/api/waste", wasteRoutes);
 app.use("/api/nutrient-gap", nutrientGapRoutes);
+app.use("/api/sdg-impact", sdgImpactRoutes);
 
 app.get("/api", (_req: Request, res: Response) => {
   res.json({
