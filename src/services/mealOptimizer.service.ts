@@ -66,6 +66,87 @@ interface ShoppingRecommendation {
   localPriceInfo?: LocalPriceInfo;
 }
 
+interface MealItem {
+  name: string;
+  category: string;
+  quantity: number;
+  unit: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  cost: number;
+  preparationNotes?: string;
+}
+
+interface DailyMealPlan {
+  day: string;
+  breakfast: MealItem[];
+  lunch: MealItem[];
+  dinner: MealItem[];
+  totalNutrition: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    fiber: number;
+  };
+  totalCost: number;
+}
+
+interface WeeklyMealPlan {
+  weeklyPlan: DailyMealPlan[];
+  weeklyNutrition: {
+    totalCalories: number;
+    totalProtein: number;
+    totalCarbs: number;
+    totalFat: number;
+    totalFiber: number;
+    dailyAverages: {
+      calories: number;
+      protein: number;
+      carbs: number;
+      fat: number;
+      fiber: number;
+    };
+  };
+  weeklyCost: number;
+}
+
+interface ShoppingListSection {
+  section: string;
+  items: Array<{
+    name: string;
+    category: string;
+    quantityNeeded: number;
+    unit: string;
+    estimatedCost: number;
+    source: 'food_inventory' | 'local_alternative' | 'user_inventory';
+    notes?: string;
+  }>;
+  totalCost: number;
+}
+
+interface ShoppingList {
+  recommendedItems: ShoppingListSection[];
+  alternativeItems: ShoppingListSection[];
+  totalEstimatedCost: number;
+  totalPotentialSavings: number;
+  shoppingNotes: string[];
+}
+
+interface MealPlanResult {
+  mealPlan: WeeklyMealPlan;
+  shoppingList: ShoppingList;
+  insights: {
+    nutritionalCompliance: string;
+    budgetEfficiency: string;
+    mealPrepTips: string[];
+    shoppingTips: string[];
+  };
+}
+
 interface OptimizationResult {
   summary: {
     totalBudget: number;
@@ -88,6 +169,7 @@ interface OptimizationResult {
     totalValue: number;
     categories: Record<string, number>;
   };
+  mealPlan?: MealPlanResult;
 }
 
 class MealOptimizerService {
@@ -130,6 +212,40 @@ class MealOptimizerService {
     } catch (error) {
       logger.error(`Meal optimization error: ${(error as Error).message}`);
       throw new Error(`Failed to optimize meals: ${(error as Error).message}`);
+    }
+  }
+
+  async generateWeeklyMealPlan(userId: string, userProfile: UserProfile, includeMealPlan: boolean = false): Promise<OptimizationResult> {
+    try {
+      logger.info(`Generating meal plan with shopping list for user ${userId}`);
+
+      // Get the basic optimization first
+      const optimizationResult = await this.optimizeMeals(userId, userProfile);
+
+      // If meal plan is requested, generate it
+      if (includeMealPlan) {
+        const userInventory = await this.getUserInventory(userId);
+        const mealPlanResult = await this.createWeeklyMealPlanAndShoppingList(
+          optimizationResult.recommendations,
+          userInventory,
+          userProfile
+        );
+
+        // Add meal plan to the optimization result
+        optimizationResult.mealPlan = mealPlanResult;
+
+        // Update insights to include meal plan info
+        optimizationResult.insights.mealPlanningSuggestions.push(
+          'Weekly meal plan generated with complete shopping list',
+          'Shopping list organized by store sections for efficient shopping'
+        );
+      }
+
+      return optimizationResult;
+
+    } catch (error) {
+      logger.error(`Meal plan generation error: ${(error as Error).message}`);
+      throw new Error(`Failed to generate meal plan: ${(error as Error).message}`);
     }
   }
 
@@ -798,6 +914,523 @@ class MealOptimizerService {
     insight += ' Check local stores for seasonal promotions and bulk discounts to optimize your grocery budget further.';
 
     return insight;
+  }
+
+  private async createWeeklyMealPlanAndShoppingList(
+    recommendations: ShoppingRecommendation[],
+    userInventory: FoodItem[],
+    userProfile: UserProfile
+  ): Promise<MealPlanResult> {
+    try {
+      logger.info('Creating weekly meal plan and shopping list');
+
+      // Generate weekly meal plan using AI
+      const weeklyMealPlan = await this.generateWeeklyMealPlanWithAI(recommendations, userInventory, userProfile);
+
+      // Generate shopping list based on meal plan
+      const shoppingList = await this.generateShoppingList(weeklyMealPlan, recommendations, userInventory);
+
+      // Generate insights
+      const insights = this.generateMealPlanInsights(weeklyMealPlan, shoppingList, userProfile);
+
+      return {
+        mealPlan: weeklyMealPlan,
+        shoppingList,
+        insights
+      };
+
+    } catch (error) {
+      logger.error(`Meal plan creation error: ${(error as Error).message}`);
+      throw error;
+    }
+  }
+
+  private async generateWeeklyMealPlanWithAI(
+    recommendations: ShoppingRecommendation[],
+    userInventory: FoodItem[],
+    userProfile: UserProfile
+  ): Promise<WeeklyMealPlan> {
+    try {
+      const familySize = userProfile.familySize || 1;
+      const dailyCalories = 2000 * familySize;
+      const dailyProtein = 75 * familySize;
+      const dailyCarbs = 275 * familySize;
+      const dailyFat = 62 * familySize;
+      const dailyFiber = 20 * familySize;
+
+      // Combine recommended items with user inventory for meal planning
+      const availableFoods = [
+        ...recommendations.map(rec => ({
+          name: rec.item.name,
+          category: rec.item.category,
+          costPerUnit: rec.item.costPerUnit,
+          isLocalAlternative: false,
+          localPrice: rec.localPriceInfo?.localPrice
+        })),
+        ...userInventory.map(item => ({
+          name: item.name,
+          category: item.category,
+          costPerUnit: item.costPerUnit,
+          isLocalAlternative: false,
+          localPrice: undefined
+        }))
+      ];
+
+      const prompt = `
+      Create a 7-day meal plan (breakfast, lunch, dinner) using these available foods:
+
+      AVAILABLE FOODS:
+      ${availableFoods.map(food => `- ${food.name} (${food.category}) - $${food.costPerUnit.toFixed(2)}/unit`).join('\n')}
+
+      NUTRITIONAL REQUIREMENTS (Daily for ${familySize} person(s)):
+      - Calories: ${dailyCalories} kcal (range: ${Math.round(dailyCalories * 0.9)}-${Math.round(dailyCalories * 1.1)} kcal)
+      - Protein: ${dailyProtein}g (minimum: ${Math.round(dailyProtein * 0.8)}g)
+      - Carbohydrates: ${dailyCarbs}g (range: ${Math.round(dailyCarbs * 0.85)}-${Math.round(dailyCarbs * 1.15)}g)
+      - Fat: ${dailyFat}g (range: ${Math.round(dailyFat * 0.85)}-${Math.round(dailyFat * 1.15)}g)
+      - Fiber: ${dailyFiber}g (minimum)
+
+      MEAL PLANNING RULES:
+      - Each meal must be at least 250 kcal
+      - Maximum 3 servings of same food per day
+      - Include at least 2 different meal types per day
+      - Each day must include: 1 fruit, 1 vegetable, 1 protein, 1 whole grain, 1 iron-rich, 1 calcium-rich item
+      - Dietary restrictions: ${userProfile.dietaryRestrictions?.join(', ') || 'None'}
+      - Consider family size: ${familySize}
+
+      Return JSON format:
+      {
+        "weeklyPlan": [
+          {
+            "day": "Monday",
+            "breakfast": [
+              {
+                "name": "food item",
+                "category": "category",
+                "quantity": number,
+                "unit": "unit",
+                "calories": number,
+                "protein": number,
+                "carbs": number,
+                "fat": number,
+                "fiber": number,
+                "cost": number,
+                "preparationNotes": "brief cooking instructions"
+              }
+            ],
+            "lunch": [...],
+            "dinner": [...]
+          }
+        ]
+      }
+
+      Focus on variety, nutritional balance, and using the available foods efficiently.
+      `;
+
+      const chatCompletion = await this.groq.chat.completions.create({
+        messages: [{ role: 'user', content: prompt }],
+        model: 'openai/gpt-oss-20b',
+        temperature: 0.7,
+        max_completion_tokens: 6000,
+        top_p: 1,
+        stream: false,
+        reasoning_effort: 'medium',
+        stop: null
+      });
+
+      const response = chatCompletion.choices[0]?.message?.content;
+      if (!response) {
+        throw new Error('No response from AI for meal planning');
+      }
+
+      const cleanResponse = response.replace(/```json\n?|\n?```/g, '').trim();
+      const aiMealPlan = JSON.parse(cleanResponse);
+
+      // Calculate weekly nutrition totals and costs
+      const weeklyPlan = aiMealPlan.weeklyPlan.map((dayPlan: any) => {
+        const allMeals = [...dayPlan.breakfast, ...dayPlan.lunch, ...dayPlan.dinner];
+        const totalNutrition = allMeals.reduce((totals: any, meal: any) => ({
+          calories: totals.calories + meal.calories,
+          protein: totals.protein + meal.protein,
+          carbs: totals.carbs + meal.carbs,
+          fat: totals.fat + meal.fat,
+          fiber: totals.fiber + meal.fiber
+        }), { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
+
+        const totalCost = allMeals.reduce((sum: number, meal: any) => sum + meal.cost, 0);
+
+        return {
+          day: dayPlan.day,
+          breakfast: dayPlan.breakfast,
+          lunch: dayPlan.lunch,
+          dinner: dayPlan.dinner,
+          totalNutrition,
+          totalCost
+        };
+      });
+
+      const weeklyNutrition = weeklyPlan.reduce((totals: any, day: DailyMealPlan) => ({
+        totalCalories: totals.totalCalories + day.totalNutrition.calories,
+        totalProtein: totals.totalProtein + day.totalNutrition.protein,
+        totalCarbs: totals.totalCarbs + day.totalNutrition.carbs,
+        totalFat: totals.totalFat + day.totalNutrition.fat,
+        totalFiber: totals.totalFiber + day.totalNutrition.fiber
+      }), { totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFat: 0, totalFiber: 0 });
+
+      const days = 7;
+      weeklyNutrition.dailyAverages = {
+        calories: Math.round(weeklyNutrition.totalCalories / days),
+        protein: Math.round(weeklyNutrition.totalProtein / days),
+        carbs: Math.round(weeklyNutrition.totalCarbs / days),
+        fat: Math.round(weeklyNutrition.totalFat / days),
+        fiber: Math.round(weeklyNutrition.totalFiber / days)
+      };
+
+      const weeklyCost = weeklyPlan.reduce((sum: number, day: DailyMealPlan) => sum + day.totalCost, 0);
+
+      return {
+        weeklyPlan,
+        weeklyNutrition,
+        weeklyCost
+      };
+
+    } catch (error) {
+      logger.error(`AI meal planning error: ${(error as Error).message}`);
+      // Return fallback meal plan
+      return this.getFallbackMealPlan(recommendations, familySize);
+    }
+  }
+
+  private async generateShoppingList(
+    weeklyMealPlan: WeeklyMealPlan,
+    recommendations: ShoppingRecommendation[],
+    userInventory: FoodItem[]
+  ): Promise<ShoppingList> {
+    try {
+      // Calculate total quantities needed from meal plan
+      const ingredientQuantities = new Map<string, {
+        category: string;
+        totalQuantity: number;
+        unit: string;
+        estimatedCost: number;
+        source: 'food_inventory' | 'local_alternative' | 'user_inventory';
+      }>();
+
+      // Aggregate all ingredients from the meal plan
+      weeklyMealPlan.weeklyPlan.forEach(day => {
+        [day.breakfast, day.lunch, day.dinner].flat().forEach(meal => {
+          const existing = ingredientQuantities.get(meal.name) || {
+            category: meal.category,
+            totalQuantity: 0,
+            unit: meal.unit,
+            estimatedCost: 0,
+            source: 'food_inventory' as const
+          };
+
+          existing.totalQuantity += meal.quantity;
+          existing.estimatedCost += meal.cost;
+          ingredientQuantities.set(meal.name, existing);
+        });
+      });
+
+      // Check what's already in user inventory
+      const inventoryMap = new Map(userInventory.map(item => [item.name.toLowerCase(), item]));
+
+      // Check what's available from recommendations and local alternatives
+      const recommendationMap = new Map(recommendations.map(rec => [rec.item.name.toLowerCase(), rec]));
+
+      // Separate items into store sections and calculate final costs
+      const storeSections = this.organizeByStoreSections(ingredientQuantities, inventoryMap, recommendationMap);
+
+      // Generate shopping notes
+      const shoppingNotes = this.generateShoppingNotes(weeklyMealPlan, userInventory);
+
+      return {
+        recommendedItems: storeSections.recommended,
+        alternativeItems: storeSections.alternatives,
+        totalEstimatedCost: storeSections.totalCost,
+        totalPotentialSavings: storeSections.totalSavings,
+        shoppingNotes
+      };
+
+    } catch (error) {
+      logger.error(`Shopping list generation error: ${(error as Error).message}`);
+      throw error;
+    }
+  }
+
+  private organizeByStoreSections(
+    ingredientQuantities: Map<string, any>,
+    inventoryMap: Map<string, FoodItem>,
+    recommendationMap: Map<string, ShoppingRecommendation>
+  ): { recommended: ShoppingListSection[], alternatives: ShoppingListSection[], totalCost: number, totalSavings: number } {
+    const sectionMapping: Record<string, string> = {
+      'protein': 'Meat & Seafood',
+      'vegetables': 'Fresh Produce',
+      'fruits': 'Fresh Produce',
+      'grains': 'Grains & Pasta',
+      'dairy': 'Dairy & Eggs',
+      'beverages': 'Beverages',
+      'snacks': 'Snacks & Pantry'
+    };
+
+    const recommendedSections = new Map<string, any[]>();
+    const alternativeSections = new Map<string, any[]>();
+    let totalCost = 0;
+    let totalSavings = 0;
+
+    // Process each ingredient
+    ingredientQuantities.forEach((ingredient, ingredientName) => {
+      const sectionName = sectionMapping[ingredient.category] || 'Other';
+      const lowerName = ingredientName.toLowerCase();
+
+      // Check if in inventory
+      const inventoryItem = inventoryMap.get(lowerName);
+      const recommendation = recommendationMap.get(lowerName);
+
+      if (inventoryItem && inventoryItem.quantity >= ingredient.totalQuantity) {
+        // Already have enough in inventory
+        return;
+      }
+
+      let shopItem = {
+        name: ingredientName,
+        category: ingredient.category,
+        quantityNeeded: ingredient.totalQuantity,
+        unit: ingredient.unit,
+        estimatedCost: ingredient.estimatedCost,
+        source: 'food_inventory' as const,
+        notes: ''
+      };
+
+      // Determine best source and calculate savings
+      if (recommendation?.localPriceInfo?.localPrice?.isCheaper) {
+        const localPrice = recommendation.localPriceInfo.localPrice;
+        const foodInventoryCost = recommendation.item.costPerUnit * ingredient.totalQuantity;
+        const localCost = localPrice.price * ingredient.totalQuantity;
+
+        shopItem.estimatedCost = localCost;
+        shopItem.source = 'local_alternative';
+        shopItem.notes = `Available at ${localPrice.store} for $${localPrice.price.toFixed(2)}/${localPrice.unit}`;
+        totalSavings += foodInventoryCost - localCost;
+      } else if (recommendation?.localPriceInfo?.alternatives?.length > 0) {
+        // Add alternative suggestion
+        const bestAlternative = recommendation.localPriceInfo.alternatives[0];
+        const altShopItem = {
+          name: bestAlternative.name,
+          category: bestAlternative.category,
+          quantityNeeded: ingredient.totalQuantity,
+          unit: bestAlternative.unit,
+          estimatedCost: bestAlternative.price * ingredient.totalQuantity,
+          source: 'local_alternative' as const,
+          notes: `${bestAlternative.nutritionalInfo}. Available at ${bestAlternative.store}`
+        };
+
+        const section = alternativeSections.get(sectionName) || [];
+        section.push(altShopItem);
+        alternativeSections.set(sectionName, section);
+        totalSavings += ingredient.estimatedCost - altShopItem.estimatedCost;
+      }
+
+      const section = recommendedSections.get(sectionName) || [];
+      section.push(shopItem);
+      recommendedSections.set(sectionName, section);
+      totalCost += shopItem.estimatedCost;
+    });
+
+    // Convert to final format
+    const formatSections = (sections: Map<string, any[]>): ShoppingListSection[] => {
+      return Array.from(sections.entries()).map(([section, items]) => ({
+        section,
+        items,
+        totalCost: items.reduce((sum, item) => sum + item.estimatedCost, 0)
+      })).sort((a, b) => a.section.localeCompare(b.section));
+    };
+
+    return {
+      recommended: formatSections(recommendedSections),
+      alternatives: formatSections(alternativeSections),
+      totalCost,
+      totalSavings
+    };
+  }
+
+  private generateShoppingNotes(weeklyMealPlan: WeeklyMealPlan, userInventory: FoodItem[]): string[] {
+    const notes = [
+      'Shop with a list to avoid impulse purchases',
+      'Check expiration dates and plan accordingly',
+      'Consider buying in bulk for non-perishable items to save money'
+    ];
+
+    // Add meal-specific tips
+    if (weeklyMealPlan.weeklyCost > 0) {
+      notes.push(`Weekly meal plan estimated cost: $${weeklyMealPlan.weeklyCost.toFixed(2)}`);
+    }
+
+    // Add inventory-based tips
+    const inventoryValue = userInventory.reduce((sum, item) => sum + (item.quantity * item.costPerUnit), 0);
+    if (inventoryValue > 50) {
+      notes.push(`You have $${inventoryValue.toFixed(2)} worth of food in inventory - use items nearing expiration first`);
+    }
+
+    // Add nutritional compliance tips
+    const dailyAvg = weeklyMealPlan.weeklyNutrition.dailyAverages;
+    if (dailyAvg.calories >= 1800 && dailyAvg.calories <= 2200) {
+      notes.push('Meal plan meets daily calorie targets');
+    }
+
+    if (dailyAvg.protein >= 60) {
+      notes.push('Adequate protein intake planned for muscle maintenance');
+    }
+
+    return notes;
+  }
+
+  private generateMealPlanInsights(
+    weeklyMealPlan: WeeklyMealPlan,
+    shoppingList: ShoppingList,
+    userProfile: UserProfile
+  ): MealPlanResult['insights'] {
+    const dailyAvg = weeklyMealPlan.weeklyNutrition.dailyAverages;
+    const familySize = userProfile.familySize || 1;
+
+    // Check nutritional compliance
+    let nutritionalCompliance = '';
+    if (dailyAvg.calories >= 1800 * familySize && dailyAvg.calories <= 2200 * familySize) {
+      nutritionalCompliance = '✅ Meal plan meets daily calorie requirements';
+    } else {
+      nutritionalCompliance = `⚠️ Daily calories (${dailyAvg.calories}) outside ideal range (${1800 * familySize}-${2200 * familySize})`;
+    }
+
+    if (dailyAvg.protein >= 60 * familySize) {
+      nutritionalCompliance += '\n✅ Adequate protein for nutritional needs';
+    }
+    if (dailyAvg.fiber >= 20 * familySize) {
+      nutritionalCompliance += '\n✅ Meets fiber requirements for digestive health';
+    }
+
+    // Budget efficiency
+    const budgetEfficiency = `Weekly meal cost: $${weeklyMealPlan.weeklyCost.toFixed(2)} ($${(weeklyMealPlan.weeklyCost / 7).toFixed(2)} per day)`;
+    if (shoppingList.totalPotentialSavings > 0) {
+      budgetEfficiency += `\n💰 Save $${shoppingList.totalPotentialSavings.toFixed(2)} by choosing local alternatives`;
+    }
+
+    // Meal prep tips
+    const mealPrepTips = [
+      'Batch cook grains and proteins on weekends',
+      'Prep vegetables in advance for quick meal assembly',
+      'Use similar ingredients across multiple meals to reduce waste',
+      'Store prepped ingredients in airtight containers'
+    ];
+
+    if (familySize > 2) {
+      mealPrepTips.push('Consider doubling recipes for larger families');
+    }
+
+    // Shopping tips
+    const shoppingTips = [
+      'Shop perimeter of store first for fresh items',
+      'Buy seasonal produce for better prices and flavor',
+      'Check store flyers for sales on planned items',
+      'Consider frozen alternatives for out-of-season produce'
+    ];
+
+    return {
+      nutritionalCompliance,
+      budgetEfficiency,
+      mealPrepTips,
+      shoppingTips
+    };
+  }
+
+  private getFallbackMealPlan(recommendations: ShoppingRecommendation[], familySize: number): WeeklyMealPlan {
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const weeklyPlan: DailyMealPlan[] = [];
+
+    // Create simple meal plan using recommended items
+    const baseMeal = {
+      calories: 400 * familySize,
+      protein: 25 * familySize,
+      carbs: 50 * familySize,
+      fat: 15 * familySize,
+      fiber: 8 * familySize
+    };
+
+    days.forEach(day => {
+      const dailyPlan: DailyMealPlan = {
+        day,
+        breakfast: [{
+          name: 'Oatmeal with fruits',
+          category: 'grains',
+          quantity: 1 * familySize,
+          unit: 'bowl',
+          calories: baseMeal.calories,
+          protein: baseMeal.protein,
+          carbs: baseMeal.carbs,
+          fat: baseMeal.fat,
+          fiber: baseMeal.fiber,
+          cost: 2.50 * familySize,
+          preparationNotes: 'Cook oats with water/milk, add fresh fruits'
+        }],
+        lunch: [{
+          name: 'Chicken salad',
+          category: 'protein',
+          quantity: 1 * familySize,
+          unit: 'serving',
+          calories: baseMeal.calories,
+          protein: baseMeal.protein,
+          carbs: baseMeal.carbs,
+          fat: baseMeal.fat,
+          fiber: baseMeal.fiber,
+          cost: 5.00 * familySize,
+          preparationNotes: 'Grilled chicken with mixed vegetables'
+        }],
+        dinner: [{
+          name: 'Rice with vegetables',
+          category: 'grains',
+          quantity: 1 * familySize,
+          unit: 'plate',
+          calories: baseMeal.calories,
+          protein: baseMeal.protein,
+          carbs: baseMeal.carbs,
+          fat: baseMeal.fat,
+          fiber: baseMeal.fiber,
+          cost: 4.00 * familySize,
+          preparationNotes: 'Brown rice with steamed vegetables'
+        }],
+        totalNutrition: {
+          calories: baseMeal.calories * 3,
+          protein: baseMeal.protein * 3,
+          carbs: baseMeal.carbs * 3,
+          fat: baseMeal.fat * 3,
+          fiber: baseMeal.fiber * 3
+        },
+        totalCost: 11.50 * familySize
+      };
+      weeklyPlan.push(dailyPlan);
+    });
+
+    const totalNutrition = weeklyPlan.reduce((totals, day) => ({
+      totalCalories: totals.totalCalories + day.totalNutrition.calories,
+      totalProtein: totals.totalProtein + day.totalNutrition.protein,
+      totalCarbs: totals.totalCarbs + day.totalNutrition.carbs,
+      totalFat: totals.totalFat + day.totalNutrition.fat,
+      totalFiber: totals.totalFiber + day.totalNutrition.fiber
+    }), { totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFat: 0, totalFiber: 0 });
+
+    return {
+      weeklyPlan,
+      weeklyNutrition: {
+        ...totalNutrition,
+        dailyAverages: {
+          calories: Math.round(totalNutrition.totalCalories / 7),
+          protein: Math.round(totalNutrition.totalProtein / 7),
+          carbs: Math.round(totalNutrition.totalCarbs / 7),
+          fat: Math.round(totalNutrition.totalFat / 7),
+          fiber: Math.round(totalNutrition.totalFiber / 7)
+        }
+      },
+      weeklyCost: weeklyPlan.reduce((sum, day) => sum + day.totalCost, 0)
+    };
   }
 }
 
