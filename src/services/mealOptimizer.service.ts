@@ -3,6 +3,7 @@ import { logger } from '../utils/logger.js';
 import FoodInventory from '../schemas/foodInventory.schema.js';
 import Inventory from '../schemas/inventory.schema.js';
 import { convertToBase, convertFromBase, formatQuantity } from '../utils/unitConverter.js';
+import localPriceSearchService from './localPriceSearch.service.js';
 
 interface UserProfile {
   budget: number;
@@ -10,6 +11,7 @@ interface UserProfile {
   preferences?: string[];
   familySize?: number;
   weeklyBudget?: boolean;
+  userLocation?: string;
 }
 
 interface FoodItem {
@@ -20,6 +22,26 @@ interface FoodItem {
   costPerUnit: number;
   quantity: number;
   unit: string;
+}
+
+interface LocalPriceInfo {
+  itemName: string;
+  localPrice?: {
+    price: number;
+    store: string;
+    location: string;
+    savings: number; // amount saved compared to FoodInventory
+    isCheaper: boolean;
+  };
+  alternatives: Array<{
+    name: string;
+    category: string;
+    price: number;
+    unit: string;
+    store: string;
+    savings: number;
+    nutritionalInfo: string;
+  }>;
 }
 
 interface ShoppingRecommendation {
@@ -41,6 +63,7 @@ interface ShoppingRecommendation {
     percentageUsed: number;
   };
   urgency: 'high' | 'medium' | 'low';
+  localPriceInfo?: LocalPriceInfo;
 }
 
 interface OptimizationResult {
@@ -50,6 +73,7 @@ interface OptimizationResult {
     remainingBudget: number;
     itemsRecommended: number;
     priorityCategories: string[];
+    localSavings?: number; // total potential savings from local alternatives
   };
   recommendations: ShoppingRecommendation[];
   insights: {
@@ -57,6 +81,7 @@ interface OptimizationResult {
     nutritionalFocus: string;
     costSavingTips: string[];
     mealPlanningSuggestions: string[];
+    localPriceInsights?: string; // insights about local price advantages
   };
   currentInventory: {
     totalItems: number;
@@ -93,8 +118,14 @@ class MealOptimizerService {
       // Step 5: Calculate budget allocation
       const optimizedRecommendations = this.optimizeForBudget(aiRecommendations, userProfile);
 
-      // Step 6: Generate final result
-      return this.generateOptimizationResult(optimizedRecommendations, userProfile, userInventory, foodCatalog);
+      // Step 6: Compare with local prices and find alternatives
+      const recommendationsWithLocalPrices = await this.enhanceWithLocalPriceComparison(
+        optimizedRecommendations,
+        userProfile.userLocation
+      );
+
+      // Step 7: Generate final result
+      return this.generateOptimizationResult(recommendationsWithLocalPrices, userProfile, userInventory, foodCatalog);
 
     } catch (error) {
       logger.error(`Meal optimization error: ${(error as Error).message}`);
@@ -255,9 +286,14 @@ class MealOptimizerService {
     const familySize = userProfile.familySize || 1;
 
     const prompt = `
-    You are a nutritionist and budget advisor. Based on this analysis, recommend specific food items to purchase:
+    You are a nutritionist and budget advisor who considers local price advantages. Based on this analysis, recommend specific food items to purchase:
 
     ${analysis}
+
+    LOCAL PRICE ADVISORY:
+    When recommending items, consider that local market prices may be more favorable for certain items.
+    Be flexible with brand and type recommendations to allow for better local deals.
+    Prioritize items that typically have good local availability and competitive pricing.
 
     Please provide exactly 8-10 specific food recommendations in JSON format:
     {
@@ -322,6 +358,8 @@ class MealOptimizerService {
     - Include staple items and versatile ingredients that complement existing inventory
     - Consider shelf life and storage
     - Ensure nutritional completeness by filling gaps in existing inventory
+    - Be flexible with specific brands/types to allow for better local pricing
+    - Consider items that typically have seasonal or local market advantages
 
     NUTRITIONAL ANALYSIS REQUIREMENT:
     For each recommendation, explain how it contributes to meeting the specific nutrition requirements above.
@@ -509,6 +547,69 @@ class MealOptimizerService {
     return optimizedRecommendations;
   }
 
+  private async enhanceWithLocalPriceComparison(
+  recommendations: ShoppingRecommendation[],
+  userLocation?: string
+): Promise<ShoppingRecommendation[]> {
+    try {
+      const enhancedRecommendations = await Promise.all(
+        recommendations.map(async (rec) => {
+          try {
+            // Search for local prices
+            const localPriceResult = await localPriceSearchService.searchLocalPrices(
+              rec.item.name,
+              rec.item.costPerUnit,
+              userLocation
+            );
+
+            // Find alternatives if local price is cheaper or if no local price found
+            const alternatives = localPriceResult?.priceComparison.isCheaper ?
+              await localPriceSearchService.findCheaperAlternatives(
+                rec.item.category,
+                rec.item.costPerUnit,
+                userLocation
+              ) : [];
+
+            const localPriceInfo: LocalPriceInfo = {
+              itemName: rec.item.name,
+              localPrice: localPriceResult ? {
+                price: localPriceResult.localPrice,
+                store: localPriceResult.localStore,
+                location: localPriceResult.location,
+                savings: rec.item.costPerUnit - localPriceResult.localPrice,
+                isCheaper: localPriceResult.priceComparison.isCheaper
+              } : undefined,
+              alternatives: alternatives.map(alt => ({
+                name: alt.name,
+                category: alt.category,
+                price: alt.localPrice,
+                unit: alt.unit,
+                store: alt.store,
+                savings: alt.savings,
+                nutritionalInfo: alt.nutritionalInfo || 'Nutritious alternative'
+              }))
+            };
+
+            return {
+              ...rec,
+              localPriceInfo
+            };
+
+          } catch (error) {
+            logger.warn(`Local price comparison failed for ${rec.item.name}: ${(error as Error).message}`);
+            return rec; // Return original recommendation if local search fails
+          }
+        })
+      );
+
+      return enhancedRecommendations;
+
+    } catch (error) {
+      logger.error(`Local price enhancement error: ${(error as Error).message}`);
+      return recommendations; // Return original recommendations if enhancement fails
+    }
+  }
+
   private generateOptimizationResult(
     recommendations: ShoppingRecommendation[],
     userProfile: UserProfile,
@@ -522,20 +623,36 @@ class MealOptimizerService {
     const inventoryCategories = this.groupInventoryByCategory(userInventory);
     const totalInventoryValue = userInventory.reduce((sum, item) => sum + (item.quantity * item.costPerUnit), 0);
 
+    // Calculate local savings
+    const localSavings = recommendations.reduce((total, rec) => {
+      if (rec.localPriceInfo?.localPrice?.isCheaper) {
+        return total + rec.localPriceInfo.localPrice.savings * rec.item.quantity;
+      }
+      return total;
+    }, 0);
+
+    // Count recommendations with local price advantages
+    const itemsWithLocalAdvantages = recommendations.filter(rec =>
+      rec.localPriceInfo?.localPrice?.isCheaper ||
+      (rec.localPriceInfo?.alternatives && rec.localPriceInfo.alternatives.length > 0)
+    ).length;
+
     return {
       summary: {
         totalBudget,
         allocatedBudget,
         remainingBudget,
         itemsRecommended: recommendations.length,
-        priorityCategories: this.getPriorityCategories(recommendations)
+        priorityCategories: this.getPriorityCategories(recommendations),
+        localSavings: localSavings > 0 ? localSavings : undefined
       },
       recommendations,
       insights: {
         budgetOptimization: this.generateBudgetInsights(allocatedBudget, totalBudget, recommendations),
         nutritionalFocus: this.generateNutritionalInsights(recommendations, inventoryCategories),
         costSavingTips: this.generateCostSavingTips(recommendations, userProfile),
-        mealPlanningSuggestions: this.generateMealPlanningSuggestions(recommendations, userInventory)
+        mealPlanningSuggestions: this.generateMealPlanningSuggestions(recommendations, userInventory),
+        localPriceInsights: this.generateLocalPriceInsights(recommendations, itemsWithLocalAdvantages)
       },
       currentInventory: {
         totalItems: userInventory.length,
@@ -646,6 +763,41 @@ class MealOptimizerService {
     }
 
     return suggestions;
+  }
+
+  private generateLocalPriceInsights(recommendations: ShoppingRecommendation[], itemsWithAdvantages: number): string {
+    if (itemsWithAdvantages === 0) {
+      return 'Current FoodInventory prices appear competitive with local market rates. Consider online shopping convenience benefits.';
+    }
+
+    const itemsWithCheaperLocal = recommendations.filter(rec =>
+      rec.localPriceInfo?.localPrice?.isCheaper
+    ).length;
+
+    const totalPotentialSavings = recommendations.reduce((total, rec) => {
+      if (rec.localPriceInfo?.localPrice?.isCheaper) {
+        return total + (rec.localPriceInfo.localPrice.savings * rec.item.quantity);
+      }
+      return total;
+    }, 0);
+
+    let insight = `${itemsWithAdvantages} of ${recommendations.length} recommended items have potential local savings advantages.`;
+
+    if (itemsWithCheaperLocal > 0) {
+      insight += ` ${itemsWithCheaperLocal} items are available at lower local prices, potentially saving you $${totalPotentialSavings.toFixed(2)}.`;
+    }
+
+    const itemsWithAlternatives = recommendations.filter(rec =>
+      rec.localPriceInfo?.alternatives && rec.localPriceInfo.alternatives.length > 0
+    ).length;
+
+    if (itemsWithAlternatives > 0) {
+      insight += ` ${itemsWithAlternatives} items have cheaper local alternatives available. Consider budget-friendly substitutes to maximize savings.`;
+    }
+
+    insight += ' Check local stores for seasonal promotions and bulk discounts to optimize your grocery budget further.';
+
+    return insight;
   }
 }
 
