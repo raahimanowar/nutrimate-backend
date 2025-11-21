@@ -28,16 +28,22 @@ Authorization: Bearer YOUR_JWT_TOKEN
 **Request Body:**
 ```json
 {
-  "itemName": "Apple",
-  "category": "fruits",
-  "quantity": 10,
-  "costPerUnit": 0.50,
+  "itemName": "Chicken",
+  "category": "protein",
+  "quantity": 3,
+  "unit": "kg",
+  "costPerUnit": 5.99,
   "hasExpiration": true,
   "expirationDate": "2025-01-30" // Optional
 }
 ```
 
 **Valid Categories:** `"fruits"`, `"vegetables"`, `"dairy"`, `"grains"`, `"protein"`, `"beverages"`, `"snacks"`, `"other"`
+
+**Supported Units:**
+- **Weight:** `kg`, `g`, `lb`, `oz`
+- **Volume:** `l`, `ml`, `gal`, `qt`, `pt`, `cup`, `fl oz`
+- **Count:** `pieces`, `items`, `servings`, `units`, `dozen`, `pair`, `pack`, `box`, `bottle`, `jar`, `can`
 
 **Success Response (201):**
 ```json
@@ -150,21 +156,26 @@ GET /inventory?category=fruits,vegetables&search=apple&sort_by=quantity&sort_ord
 {
   "date": "2025-01-21", // Optional, defaults to today
   "item": {
-    "itemName": "Apple",
-    "quantity": 2,
-    "category": "fruits",
-    "mealType": "snack",
-    "unit": "pieces", // Optional, defaults to "servings"
-    "calories": 100, // Optional nutritional info
-    "protein": 0.5,
-    "carbs": 25,
-    "fats": 0.2,
-    "fiber": 4,
-    "sugar": 19,
-    "sodium": 1
+    "itemName": "Chicken",
+    "quantity": 200,
+    "category": "protein",
+    "mealType": "dinner",
+    "unit": "g", // Unit must match inventory unit type
+    "calories": 330, // Optional nutritional info
+    "protein": 31,
+    "carbs": 0,
+    "fats": 22,
+    "fiber": 0,
+    "sugar": 0,
+    "sodium": 75
   }
 }
 ```
+
+**🔄 Unit Conversion Examples:**
+- **3kg chicken** in inventory → eat **200g** → **2.8kg remaining**
+- **2l milk** in inventory → drink **250ml** → **1.75l remaining**
+- **10 apples** (pieces) → eat **2 pieces** → **8 pieces remaining**
 
 **Valid Meal Types:** `"breakfast"`, `"lunch"`, `"dinner"`, `"snack"`, `"beverage"`
 
@@ -193,9 +204,13 @@ GET /inventory?category=fruits,vegetables&search=apple&sort_by=quantity&sort_ord
     "totalFats": 0.4,
     "inventoryUpdate": {
       "success": true,
-      "message": "Successfully reduced 2 Apple(s) from inventory",
-      "previousQuantity": 10,
-      "newQuantity": 8,
+      "message": "Successfully consumed 200.00 g of Chicken. Remaining: 2.80 kg",
+      "previousQuantity": "3.00 kg",
+      "newQuantity": "2.80 kg",
+      "consumedQuantity": "200.00 g",
+      "unit": "kg",
+      "previousBaseQuantity": 3000,
+      "newBaseQuantity": 2800,
       "inventoryStatus": "updated"
     },
     "waterIntake": 0,
@@ -213,13 +228,26 @@ GET /inventory?category=fruits,vegetables&search=apple&sort_by=quantity&sort_ord
 }
 ```
 
-#### Error Response (400) - Insufficient Quantity
+#### Error Response (400) - Insufficient Quantity (With Units)
 ```json
 {
   "success": false,
-  "message": "Insufficient quantity. You have 3 Apple(s) but tried to consume 5",
+  "message": "Insufficient quantity. You have 500.00 g of Chicken but tried to consume 200.00 g",
   "inventoryStatus": "insufficient",
-  "currentQuantity": 3
+  "currentQuantity": "500.00 g",
+  "requestedUnit": "g",
+  "inventoryUnit": "kg"
+}
+```
+
+#### Error Response (400) - Unit Mismatch
+```json
+{
+  "success": false,
+  "message": "Unit mismatch. Inventory uses \"kg\" but you tried to consume in \"pieces\"",
+  "inventoryStatus": "unit_mismatch",
+  "requestedUnit": "pieces",
+  "inventoryUnit": "kg"
 }
 ```
 

@@ -4,6 +4,7 @@ import Inventory from "../schemas/inventory.schema.js";
 import { AuthRequest } from "../types/auth.types.js";
 import { ObjectId } from "mongoose";
 import { body, validationResult } from "express-validator";
+import { convertToBase, getBaseUnit, UNIT_CONVERSIONS } from "../utils/unitConverter.js";
 
 // Filter interfaces for type safety
 interface InventoryFilters {
@@ -75,10 +76,15 @@ export const validateInventoryItem = [
     .isBoolean()
     .withMessage('Has expiration must be a boolean'),
 
+  body('unit')
+    .optional()
+    .isIn(Object.keys(UNIT_CONVERSIONS))
+    .withMessage('Invalid unit. Use kg, g, lb, oz, l, ml, pieces, etc.'),
+
   body('quantity')
     .optional()
-    .isInt({ min: 0 })
-    .withMessage('Quantity must be a non-negative integer'),
+    .isFloat({ min: 0 })
+    .withMessage('Quantity must be a non-negative number'),
 
   body('expirationDate')
     .if(body('hasExpiration').equals('true'))
@@ -112,7 +118,11 @@ export const addItem = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const { itemName, category, expirationDate, hasExpiration, costPerUnit, quantity = 1 } = req.body;
+    const { itemName, category, expirationDate, hasExpiration, costPerUnit, quantity = 1, unit = 'pieces' } = req.body;
+
+    // Convert quantity to base unit for consistent tracking
+    const baseUnit = getBaseUnit(unit);
+    const baseQuantity = convertToBase(Number(quantity), unit);
 
     const newItem = new Inventory({
       itemName: itemName.trim(),
@@ -120,7 +130,10 @@ export const addItem = async (req: AuthRequest, res: Response) => {
       expirationDate: hasExpiration && expirationDate ? new Date(expirationDate) : null,
       hasExpiration: hasExpiration !== undefined ? hasExpiration : true,
       costPerUnit,
-      quantity: Math.max(0, Number(quantity) || 1), // Ensure quantity is a positive number
+      quantity: Math.max(0, Number(quantity) || 1),
+      unit,
+      baseQuantity: Math.max(0, baseQuantity),
+      baseUnit,
       userId: req.user.userId
     });
 
