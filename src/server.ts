@@ -14,6 +14,7 @@ import resourceRoutes from "./routes/resource.route.js";
 import trackingRoutes from "./routes/tracking.routes.js";
 import foodImageRoutes from "./routes/food-image.routes.js";
 import foodInventoryRoutes from "./routes/foodInventory.routes.js";
+import chatRoutes from "./routes/chat.routes.js";
 
 dotenv.config();
 
@@ -24,11 +25,20 @@ app.set("trust proxy", true);
 // CRITICAL: CORS must be the absolute FIRST middleware - handle OPTIONS immediately
 app.use((req, res, next) => {
   // Set CORS headers on EVERY response
-  res.setHeader("Access-Control-Allow-Origin", "https://nutrimate-bice.vercel.app");
+  res.setHeader(
+    "Access-Control-Allow-Origin",
+    "https://nutrimate-bice.vercel.app"
+  );
   res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS,PATCH");
-  
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With, Accept"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,DELETE,OPTIONS,PATCH"
+  );
+
   // Immediately respond to OPTIONS with 204 No Content
   if (req.method === "OPTIONS") {
     res.status(204).end();
@@ -43,7 +53,11 @@ app.use(
   cors({
     origin: (origin, callback) => {
       // Allow localhost for development
-      if (!origin || origin.includes("localhost") || origin.includes("127.0.0.1")) {
+      if (
+        !origin ||
+        origin.includes("localhost") ||
+        origin.includes("127.0.0.1")
+      ) {
         callback(null, true);
       }
       // Allow production URLs
@@ -57,7 +71,12 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
+    ],
   })
 );
 
@@ -80,6 +99,7 @@ app.use("/api/tracking", trackingRoutes);
 app.use("/api/communities", communityRoutes);
 app.use("/api/food-images", foodImageRoutes);
 app.use("/api/food-inventory", foodInventoryRoutes);
+app.use("/api/chat", chatRoutes);
 
 app.get("/api", (_req: Request, res: Response) => {
   res.json({
@@ -97,7 +117,11 @@ app.use((err: any, req: any, res: any, next: any) => {
 
   try {
     // Check if res is a valid Express response object
-    if (res && typeof res.status === 'function' && typeof res.json === 'function') {
+    if (
+      res &&
+      typeof res.status === "function" &&
+      typeof res.json === "function"
+    ) {
       return res.status(500).json({
         success: false,
         message: err.message || "Internal Server Error",
@@ -105,22 +129,32 @@ app.use((err: any, req: any, res: any, next: any) => {
     }
 
     // Fallback: Try to send response using basic methods
-    if (res && typeof res.writeHead === 'function' && typeof res.end === 'function') {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({
-        success: false,
-        message: err.message || "Internal Server Error",
-      }));
+    if (
+      res &&
+      typeof res.writeHead === "function" &&
+      typeof res.end === "function"
+    ) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      return res.end(
+        JSON.stringify({
+          success: false,
+          message: err.message || "Internal Server Error",
+        })
+      );
     }
 
     // Last resort: Log and call next to prevent hanging
-    console.error('Could not send error response - response object:', typeof res, res);
-    if (typeof next === 'function') {
+    console.error(
+      "Could not send error response - response object:",
+      typeof res,
+      res
+    );
+    if (typeof next === "function") {
       next(err);
     }
   } catch (error) {
-    console.error('Error in error handler:', error);
-    if (typeof next === 'function') {
+    console.error("Error in error handler:", error);
+    if (typeof next === "function") {
       next(err);
     }
   }
