@@ -47,8 +47,7 @@ Content-Type: application/json
     "allocatedBudget": 450.75,
     "remainingBudget": 149.25,
     "itemsRecommended": 9,
-    "priorityCategories": ["protein", "vegetables", "grains"],
-    "localSavings": 23.50
+    "priorityCategories": ["protein", "vegetables", "grains"]
   },
   "recommendations": [
     {
@@ -72,22 +71,15 @@ Content-Type: application/json
       "urgency": "high",
       "localPriceInfo": {
         "itemName": "Organic Chicken Breast",
-        "localPrice": {
-          "price": 5.49,
-          "store": "Trader Joe's",
-          "location": "New York, NY",
-          "savings": 1.50,
-          "isCheaper": true
-        },
-        "alternatives": [
+        "localAlternatives": [
           {
-            "name": "Chicken Thighs",
+            "name": "Store Brand Chicken Thighs",
             "category": "protein",
-            "price": 3.99,
+            "currentPrice": 2.99,
             "unit": "lb",
-            "store": "Walmart",
-            "savings": 3.00,
-            "nutritionalInfo": "Higher fat content but more budget-friendly"
+            "priceType": "store brand",
+            "nutritionalInfo": "Higher fat content but excellent protein source",
+            "savings": "Save $3.00 per lb compared to organic"
           }
         ]
       }
@@ -103,8 +95,7 @@ Content-Type: application/json
     "mealPlanningSuggestions": [
       "Plan 3-4 days worth of meals to reduce food waste",
       "Prep ingredients in batches for efficient cooking"
-    ],
-    "localPriceInsights": "3 of 9 recommended items have potential local savings advantages. 2 items are available at lower local prices, potentially saving you $23.50."
+    ]
   },
   "currentInventory": {
     "totalItems": 12,
@@ -150,16 +141,14 @@ Content-Type: application/json
     "allocatedBudget": 145.80,
     "remainingBudget": 54.20,
     "itemsRecommended": 8,
-    "priorityCategories": ["protein", "vegetables", "grains"],
-    "localSavings": 18.75
+    "priorityCategories": ["protein", "vegetables", "grains"]
   },
   "recommendations": [...],
   "insights": {
     "budgetOptimization": "You're utilizing 72.9% of your $200.00 budget.",
     "nutritionalFocus": "Your shopping plan focuses on protein, vegetables, grains.",
     "costSavingTips": [...],
-    "mealPlanningSuggestions": [...],
-    "localPriceInsights": "4 of 8 recommended items have potential local savings advantages."
+    "mealPlanningSuggestions": [...]
   },
   "currentInventory": {...},
   "mealPlan": {
@@ -259,7 +248,7 @@ Content-Type: application/json
               "unit": "cups",
               "estimatedCost": 9.00,
               "source": "local_alternative",
-              "notes": "Available at Trader Joe's for $3.00/cup - seasonal"
+              "notes": "Seasonal pricing - available at $3.00/cup"
             }
           ],
           "totalCost": 16.50
@@ -291,7 +280,7 @@ Content-Type: application/json
               "unit": "lbs",
               "estimatedCost": 5.00,
               "source": "local_alternative",
-              "notes": "Nutrient-dense alternative to spinach. Available at Safeway"
+              "notes": "Nutrient-dense alternative to spinach. Typically available at lower cost"
             }
           ],
           "totalCost": 5.00
@@ -338,7 +327,6 @@ Content-Type: application/json
 | `budget` | number | Yes | Total budget for shopping (weekly if weeklyBudget is true, per trip if false) | 150 |
 | `dietaryRestrictions` | string[] | No | User dietary restrictions | ["vegetarian", "gluten-free", "dairy-free"] |
 | `preferences` | string[] | No | Food preferences | ["organic", "low-sodium", "non-gmo"] |
-| `familySize` | number | No | Number of people in household | 4 |
 | `weeklyBudget` | boolean | No | Whether budget is weekly (multiplied by 4) | true |
 | `userLocation` | string | No | User location for local price comparisons | "New York, NY" |
 
@@ -351,7 +339,7 @@ Content-Type: application/json
 | `item` | object | Food item details |
 | `budgetImpact` | object | Cost information |
 | `urgency` | string | Priority level: "high", "medium", "low" |
-| `localPriceInfo` | object | Local price comparison data |
+| `localPriceInfo` | object | Local market price alternatives data |
 
 ### Meal Item
 
