@@ -33,6 +33,7 @@ interface ShoppingRecommendation {
     reason: string;
     nutritionalValue: string;
     alternativeOptions?: string[];
+    inventoryStatus: 'in_inventory' | 'not_in_inventory' | 'low_stock' | 'needs_restock';
   };
   budgetImpact: {
     cost: number;
@@ -87,7 +88,7 @@ class MealOptimizerService {
       const analysis = await this.analyzeNutritionalNeeds(userInventory, foodCatalog, userProfile);
 
       // Step 4: Get AI-powered recommendations
-      const aiRecommendations = await this.getAIRecommendations(analysis, userProfile);
+      const aiRecommendations = await this.getAIRecommendations(analysis, userProfile, userInventory);
 
       // Step 5: Calculate budget allocation
       const optimizedRecommendations = this.optimizeForBudget(aiRecommendations, userProfile);
@@ -139,30 +140,117 @@ class MealOptimizerService {
     const totalBudget = userProfile.weeklyBudget ? userProfile.budget * 4 : userProfile.budget;
     const inventoryValue = userInventory.reduce((total, item) => total + (item.quantity * item.costPerUnit), 0);
 
+    // Create detailed inventory list with quantities
+    const detailedInventoryList = userInventory.map(item =>
+      `- ${item.name} (${item.quantity} ${item.unit}) - ${item.category} - $${(item.quantity * item.costPerUnit).toFixed(2)} total`
+    ).join('\n');
+
+    // Check what categories need restocking
+    const categoryNeeds = this.analyzeCategoryNeeds(userInventory, foodCatalog);
+
+    const familySize = userProfile.familySize || 1;
     const analysisPrompt = `
     User Profile Analysis:
     - Budget: $${totalBudget} (${userProfile.weeklyBudget ? 'monthly' : 'per shopping trip'})
-    - Family Size: ${userProfile.familySize || 1} people
+    - Family Size: ${familySize} people
     - Dietary Restrictions: ${userProfile.dietaryRestrictions?.join(', ') || 'None'}
     - Current Inventory Value: $${inventoryValue.toFixed(2)}
 
-    Current Inventory by Category:
-    ${Object.entries(currentInventoryByCategory).map(([category, items]) =>
-      `- ${category}: ${items.length} items, total value: $${items.reduce((sum, item) => sum + (item.quantity * item.costPerUnit), 0).toFixed(2)}`
-    ).join('\n')}
+    NUTRITIONAL REQUIREMENTS FOR ${familySize} PERSON(S):
+    Daily Targets (multiply by ${familySize} for family):
+    - Calories: 2000 kcal (range: 1800-2200 kcal)
+    - Carbohydrates: 225-325g
+    - Protein: 75-125g (minimum: 60g)
+    - Fat: 45-80g
+    - Fiber: 20g minimum
+    - Unsaturated Fats: 15g minimum
+
+    Required Daily Categories:
+    - At least 1 fruit item
+    - At least 1 vegetable item
+    - At least 1 whole grain/complex carb
+    - At least 1 protein source
+    - At least 1 iron-rich item
+    - At least 1 calcium-rich item
+
+    Meal Structure Rules:
+    - Max 3 servings of same food per day
+    - At least 2 different meal types per day
+    - No meal below 250 kcal
+
+    CURRENT INVENTORY (Do NOT recommend these items):
+    ${detailedInventoryList}
+
+    INVENTORY ANALYSIS:
+    ${categoryNeeds}
 
     Available Food Categories in Catalog:
     ${Object.entries(this.groupCatalogByCategory(foodCatalog)).map(([category, items]) =>
       `- ${category}: ${items.length} different options, avg cost: $${(items.reduce((sum, item) => sum + item.costPerUnit, 0) / items.length).toFixed(2)} per unit`
     ).join('\n')}
 
-    Analyze the nutritional gaps and provide insights about what this user needs to prioritize for balanced meals based on their inventory and budget.
+    CRITICAL INSTRUCTIONS:
+    1. ONLY recommend food items the user does NOT already have in their inventory
+    2. Focus on categories where the user has low quantities or missing items
+    3. Consider expiration dates - recommend buying fresh items that will last
+    4. Analyze what they need for balanced meals based on current inventory gaps
+    5. If they have sufficient quantity of an item, DO NOT recommend buying more
+    6. Ensure recommendations help achieve ALL nutritional targets listed above
+
+    Analyze the nutritional gaps and provide insights about what this user needs to purchase for balanced meals that meet all nutritional requirements, avoiding items they already have.
     `;
 
     return analysisPrompt;
   }
 
-  private async getAIRecommendations(analysis: string, userProfile: UserProfile): Promise<ShoppingRecommendation[]> {
+  private analyzeCategoryNeeds(userInventory: FoodItem[], foodCatalog: FoodItem[]): string {
+    const inventoryByCategory = this.groupInventoryByCategory(userInventory);
+    const needs: string[] = [];
+
+    // Analyze each category
+    Object.entries(inventoryByCategory).forEach(([category, items]) => {
+      const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+      const uniqueItems = items.length;
+
+      if (category === 'protein' && totalQuantity < 5) {
+        needs.push(`- PROTEINS: Low stock (${totalQuantity.toFixed(1)} total units, ${uniqueItems} different items). Need to restock.`);
+      } else if (category === 'vegetables' && totalQuantity < 10) {
+        needs.push(`- VEGETABLES: Insufficient fresh produce (${totalQuantity.toFixed(1)} total units). Recommend buying more.`);
+      } else if (category === 'fruits' && totalQuantity < 8) {
+        needs.push(`- FRUITS: Low quantity (${totalQuantity.toFixed(1)} total units). Add variety for vitamins.`);
+      } else if (category === 'grains' && totalQuantity < 5) {
+        needs.push(`- GRAINS: Running low (${totalQuantity.toFixed(1)} total units). Staples needed.`);
+      } else if (category === 'dairy' && totalQuantity < 3) {
+        needs.push(`- DAIRY: Limited supply (${totalQuantity.toFixed(1)} total units). Consider restocking.`);
+      } else if (uniqueItems <= 1 && category !== 'snacks') {
+        needs.push(`- ${category.toUpperCase()}: Low variety (${uniqueItems} item${uniqueItems !== 1 ? 's' : ''}). Add more variety for nutrition.`);
+      } else {
+        needs.push(`- ${category.toUpperCase()}: Well stocked (${totalQuantity.toFixed(1)} total units, ${uniqueItems} different items).`);
+      }
+    });
+
+    // Check for missing categories
+    const allCategories = ['protein', 'vegetables', 'fruits', 'grains', 'dairy'];
+    const presentCategories = Object.keys(inventoryByCategory);
+
+    allCategories.forEach(category => {
+      if (!presentCategories.includes(category)) {
+        needs.push(`- ${category.toUpperCase()}: COMPLETELY MISSING. This is a priority category.`);
+      }
+    });
+
+    return needs.join('\n');
+  }
+
+  private isInInventory(userInventory: FoodItem[], itemName: string): boolean {
+    return userInventory.some(item =>
+      item.name.toLowerCase() === itemName.toLowerCase() ||
+      item.name.toLowerCase().includes(itemName.toLowerCase()) ||
+      itemName.toLowerCase().includes(item.name.toLowerCase())
+    );
+  }
+
+  private async getAIRecommendations(analysis: string, userProfile: UserProfile, userInventory: FoodItem[]): Promise<ShoppingRecommendation[]> {
     const totalBudget = userProfile.weeklyBudget ? userProfile.budget * 4 : userProfile.budget;
     const familySize = userProfile.familySize || 1;
 
@@ -184,20 +272,60 @@ class MealOptimizerService {
           "reason": "why this is recommended",
           "nutritionalValue": "key nutritional benefits",
           "urgency": "high/medium/low",
-          "alternativeOptions": ["alternative 1", "alternative 2"]
+          "alternativeOptions": ["alternative 1", "alternative 2"],
+          "inventoryStatus": "not_in_inventory"
         }
       ]
     }
 
-    Guidelines:
+    STRICT NUTRITION REQUIREMENTS (Must Be Satisfied):
+
+    Daily Calorie Target: 2000 kcal (Acceptable range: 1800–2200 kcal)
+
+    Macronutrient Rules:
+    - Total Carbohydrates: must be between 225–325g
+    - Total Protein: must be between 75–125g (Hard minimum: 60g/day - never lower)
+    - Total Fat: must be between 45–80g
+    - Fiber: must be at least 20g/day
+    - Healthy Unsaturated Fats: must be at least 15g/day
+
+    Micronutrient Presence Rules (Each day must contain at least one item from each category):
+    - At least 1 fruit item
+    - At least 1 vegetable item
+    - At least 1 whole grain or complex carbohydrate (e.g., brown rice, oats, quinoa, whole-wheat bread)
+    - At least 1 protein source (e.g., chicken, eggs, lentils, fish, tofu)
+    - At least 1 iron-rich item (e.g., spinach, lentils, chickpeas, beef)
+    - At least 1 calcium-rich item (e.g., milk, yogurt, tofu, cheese)
+
+    Meal Structure Rules:
+    - Maximum 3 servings of the same food item per day
+    - Must include at least 2 different meal types per day (breakfast + lunch, or lunch + dinner)
+    - No meal may be below 250 kcal
+
+    Strict Compliance:
+    - If any condition is not met, revise the meal plan until all rules are satisfied
+    - Never ignore or relax a rule
+    - The rules apply whether you are generating, optimizing, or adjusting the plan
+
+    CRITICAL INVENTORY RULES:
+    1. NEVER recommend items that are already in the user's inventory (listed under "CURRENT INVENTORY")
+    2. Focus on categories with "LOW STOCK", "INSUFFICIENT", or "COMPLETELY MISSING"
+    3. If a category is "WELL STOCKED", do not recommend items from that category unless variety is needed
+    4. Avoid recommending the same item names as those in inventory (exact matching or very similar)
+    5. Always set "inventoryStatus": "not_in_inventory" since we only recommend what they need to buy
+
+    Additional Guidelines:
     - Stay within the $${totalBudget} budget
-    - Consider family size of ${familySize}
-    - Prioritize nutritional completeness
-    - Include variety across food groups
-    - Consider shelf life and storage
+    - Consider family size of ${familySize} (multiply nutrition requirements by family size)
     - Account for dietary restrictions: ${userProfile.dietaryRestrictions?.join(', ') || 'None'}
     - Focus on cost-effective, nutrient-dense options
-    - Include staple items and versatile ingredients
+    - Include staple items and versatile ingredients that complement existing inventory
+    - Consider shelf life and storage
+    - Ensure nutritional completeness by filling gaps in existing inventory
+
+    NUTRITIONAL ANALYSIS REQUIREMENT:
+    For each recommendation, explain how it contributes to meeting the specific nutrition requirements above.
+    Consider the nutritional gaps in the user's current inventory and recommend items that help achieve ALL nutritional targets.
 
     Return ONLY valid JSON, no additional text.
     `;
@@ -229,7 +357,10 @@ class MealOptimizerService {
       const cleanResponse = response.replace(/```json\n?|\n?```/g, '').trim();
       const aiResponse = JSON.parse(cleanResponse);
 
-      return aiResponse.recommendations.map((rec: any) => ({
+      // Filter out recommendations that conflict with user's inventory
+      const filteredRecommendations = aiResponse.recommendations.filter((rec: any) =>
+        !this.isInInventory(userInventory, rec.name)
+      ).map((rec: any) => ({
         item: {
           name: rec.name,
           category: rec.category,
@@ -239,7 +370,8 @@ class MealOptimizerService {
           totalCost: rec.totalCost,
           reason: rec.reason,
           nutritionalValue: rec.nutritionalValue,
-          alternativeOptions: rec.alternativeOptions || []
+          alternativeOptions: rec.alternativeOptions || [],
+          inventoryStatus: 'not_in_inventory'
         },
         budgetImpact: {
           cost: rec.totalCost,
@@ -248,6 +380,8 @@ class MealOptimizerService {
         },
         urgency: rec.urgency || 'medium'
       }));
+
+      return filteredRecommendations;
 
     } catch (error) {
       logger.error(`AI recommendation error: ${(error as Error).message}`);
@@ -296,7 +430,8 @@ class MealOptimizerService {
     return fallbackItems.map(item => ({
       item: {
         ...item,
-        alternativeOptions: []
+        alternativeOptions: [],
+        inventoryStatus: 'not_in_inventory' as const
       },
       budgetImpact: {
         cost: item.totalCost,

@@ -224,6 +224,41 @@ GET /meal-optimizer/recommendations?categories=protein,vegetables&budget=50
 
 ---
 
+## 🥗 Strict Nutrition Requirements
+
+The AI Meal Optimizer follows strict nutritional guidelines to ensure balanced and healthy meal plans:
+
+### Daily Nutrition Targets (per person)
+- **Calories**: 2000 kcal (acceptable range: 1800-2200 kcal)
+- **Carbohydrates**: 225-325g
+- **Protein**: 75-125g (hard minimum: 60g)
+- **Fat**: 45-80g
+- **Fiber**: 20g minimum
+- **Unsaturated Fats**: 15g minimum
+
+### Required Daily Categories
+The meal plan ensures at least one item from each category:
+- 🍎 **Fruits**: At least 1 fruit item
+- 🥬 **Vegetables**: At least 1 vegetable item
+- 🌾 **Whole Grains**: At least 1 complex carbohydrate (brown rice, oats, quinoa, whole-wheat bread)
+- 🥩 **Protein**: At least 1 protein source (chicken, eggs, lentils, fish, tofu)
+- 🩸 **Iron-Rich**: At least 1 iron source (spinach, lentils, chickpeas, beef)
+- 🥛 **Calcium-Rich**: At least 1 calcium source (milk, yogurt, tofu, cheese)
+
+### Meal Structure Rules
+- Maximum 3 servings of the same food item per day
+- Must include at least 2 different meal types per day (breakfast + lunch, or lunch + dinner)
+- No meal may be below 250 kcal
+- **Strict Compliance**: If any condition is not met, the AI revises the meal plan until all rules are satisfied
+
+### Family Size Scaling
+All nutritional requirements automatically scale based on family size:
+- Family of 2: Double all nutritional targets
+- Family of 3: Triple all nutritional targets
+- And so on...
+
+---
+
 ## 🤖 AI Model Details
 
 ### Technology Stack
@@ -331,7 +366,17 @@ POST /api/meal-optimizer/optimize
 }
 ```
 
-### 4. Quick Budget Check
+### 4. Complete Nutrition Plan
+```bash
+POST /api/meal-optimizer/optimize
+{
+  "budget": 200,
+  "familySize": 2,
+  "preferences": ["nutritionally-complete"]
+}
+```
+
+### 5. Quick Budget Check
 ```bash
 POST /api/meal-optimizer/budget-analysis
 {
@@ -340,7 +385,7 @@ POST /api/meal-optimizer/budget-analysis
 }
 ```
 
-### 5. Category-Specific Shopping
+### 6. Category-Specific Shopping
 ```bash
 GET /api/meal-optimizer/recommendations?categories=protein,dairy&budget=75
 ```
