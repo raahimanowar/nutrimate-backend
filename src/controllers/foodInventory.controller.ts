@@ -1,19 +1,29 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Request, Response } from "express";
 import FoodInventory from "../schemas/foodInventory.schema.js";
 
-// GET /api/food-inventory
 export const getFoodInventory = async (req: Request, res: Response) => {
   try {
-    const { category } = req.query;
+    const { category, page = "1", limit = "20" } = req.query;
 
     const query: any = {};
     if (category) query.category = (category as string).toLowerCase();
 
-    const items = await FoodInventory.find(query).sort({ name: 1 });
-    console.log(items);
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = parseInt(limit as string, 10);
+
+    const total = await FoodInventory.countDocuments(query);
+    const items = await FoodInventory.find(query)
+      .sort({ name: 1 })
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum);
 
     res.json({
       success: true,
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPages: Math.ceil(total / limitNum),
       items,
     });
   } catch (err) {
@@ -25,13 +35,19 @@ export const getFoodInventory = async (req: Request, res: Response) => {
 // POST /api/food-inventory
 export const addFoodItem = async (req: Request, res: Response) => {
   try {
-    const { name, category, expirationDays, costPerUnit, quantity = 0 } = req.body;
+    const {
+      name,
+      category,
+      expirationDays,
+      costPerUnit,
+      quantity = 0,
+    } = req.body;
 
-    // Validate required fields
     if (!name || !category || !expirationDays || !costPerUnit) {
       return res.status(400).json({
         success: false,
-        message: "Missing required fields: name, category, expirationDays, costPerUnit"
+        message:
+          "Missing required fields: name, category, expirationDays, costPerUnit",
       });
     }
 
@@ -40,7 +56,7 @@ export const addFoodItem = async (req: Request, res: Response) => {
       category: category.toLowerCase(),
       expirationDays,
       costPerUnit,
-      quantity
+      quantity,
     });
 
     await newItem.save();
@@ -48,7 +64,7 @@ export const addFoodItem = async (req: Request, res: Response) => {
     res.status(201).json({
       success: true,
       message: "Food item added successfully",
-      item: newItem
+      item: newItem,
     });
   } catch (err) {
     console.error(err);
