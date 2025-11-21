@@ -67,3 +67,24 @@ Rules:
     res.status(500).json({ message: "Chat failed", error: err.message });
   }
 };
+
+export const getChatHistory = async (req: Request, res: Response) => {
+  try {
+    const username = req.params.username?.trim();
+    if (!username) {
+      return res.status(400).json({ message: "Username is required" });
+    }
+
+    const userChat = await Chat.findOne({ username }).lean();
+    if (!userChat) {
+      return res.status(404).json({ message: "No chat history found" });
+    }
+
+    res.json(userChat);
+  } catch (err) {
+    console.error("❌ Get chat history error:", err);
+    res
+      .status(500)
+      .json({ message: "Failed to fetch chat history", error: err.message });
+  }
+};
